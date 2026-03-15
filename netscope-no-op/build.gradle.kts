@@ -1,0 +1,22 @@
+plugins {
+    alias(libs.plugins.android.library)
+    alias(libs.plugins.vanniktech.publish)
+}
+
+
+
+android {
+    namespace = "io.netscope.noop"
+    compileSdk = 36
+    defaultConfig { minSdk = 21 }
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+    kotlin { jvmToolchain(17) }
+}
+
+dependencies {
+    // OkHttp — same compileOnly, so consumers can swap implementations freely
+    compileOnly("com.squareup.okhttp3:okhttp:4.12.0")
+}

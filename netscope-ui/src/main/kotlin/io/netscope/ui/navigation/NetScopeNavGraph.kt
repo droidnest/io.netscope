@@ -1,0 +1,45 @@
+package io.netscope.ui.navigation
+
+import androidx.compose.runtime.Composable
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavHostController
+import androidx.navigation.NavType
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.navArgument
+import io.netscope.ui.screen.TransactionDetailScreen
+import io.netscope.ui.screen.TransactionListScreen
+import io.netscope.ui.viewmodel.NetScopeViewModel
+
+private const val ROUTE_LIST = "list"
+private const val ROUTE_DETAIL = "detail/{transactionId}"
+
+@Composable
+fun NetScopeNavGraph(navController: NavHostController) {
+    val viewModel: NetScopeViewModel = viewModel(factory = NetScopeViewModel.Factory())
+
+    NavHost(navController = navController, startDestination = ROUTE_LIST) {
+        composable(ROUTE_LIST) {
+            TransactionListScreen(
+                viewModel = viewModel,
+                onTransactionClick = { id ->
+                    viewModel.selectTransaction(id)
+                    navController.navigate("detail/$id")
+                },
+            )
+        }
+
+        composable(
+            route = ROUTE_DETAIL,
+            arguments = listOf(navArgument("transactionId") { type = NavType.LongType }),
+        ) {
+            TransactionDetailScreen(
+                viewModel = viewModel,
+                onBack = {
+                    viewModel.clearSelection()
+                    navController.popBackStack()
+                },
+            )
+        }
+    }
+}
