@@ -20,7 +20,8 @@ subprojects {
         extensions.configure<MavenPublishBaseExtension> {
             publishToMavenCentral(SonatypeHost.CENTRAL_PORTAL)
             signAllPublications()
-            coordinates("io.netscope", artifactId, "0.1.0")
+            coordinates("io.github.nidhal92", artifactId, "0.1.0")
+            // coordinates("io.netscope", artifactId, "0.1.0")
             pom {
                 name.set(artifactId)
                 description.set(descriptions[artifactId] ?: "NetScope")
