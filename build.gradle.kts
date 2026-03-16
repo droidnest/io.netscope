@@ -26,7 +26,7 @@ subprojects {
                 name.set(artifactId)
                 description.set(descriptions[artifactId] ?: "NetScope")
                 inceptionYear.set("2024")
-                url.set("https://github.com/nidhal92/netscope")
+                url.set("https://github.com/nidhal92/io.netscope")
                 licenses {
                     license {
                         name.set("Apache-2.0")
@@ -43,9 +43,9 @@ subprojects {
                     }
                 }
                 scm {
-                    url.set("https://github.com/nidhal92/netscope")
-                    connection.set("scm:git:git://github.com/nidhal92/netscope.git")
-                    developerConnection.set("scm:git:ssh://git@github.com/nidhal92/netscope.git")
+                    url.set("https://github.com/nidhal92/io.netscope")
+                    connection.set("scm:git:git://github.com/nidhal92/io.netscope.git")
+                    developerConnection.set("scm:git:ssh://git@github.com/nidhal92/io.netscope.git")
                 }
             }
         }
