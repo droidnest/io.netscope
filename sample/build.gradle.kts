@@ -35,6 +35,7 @@ android {
 
 dependencies {
     implementation(project(":netscope-ui"))
+    implementation(project(":netscope-notification"))
 
     implementation(libs.okhttp)
     implementation(libs.coroutines.android)
