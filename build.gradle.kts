@@ -10,9 +10,10 @@ plugins {
 }
 
 val descriptions = mapOf(
-    "netscope-core"  to "NetScope — Core interceptor and storage module.",
-    "netscope-ui"    to "NetScope — Compose UI module.",
-    "netscope-no-op" to "NetScope — Release no-op stub, zero overhead.",
+    "netscope-core"         to "NetScope — Core interceptor and storage module.",
+    "netscope-ui"           to "NetScope — Compose UI module.",
+    "netscope-notification" to "NetScope — Persistent notification with live request stats.",
+    "netscope-no-op"        to "NetScope — Release no-op stub, zero overhead.",
 )
 
 subprojects {

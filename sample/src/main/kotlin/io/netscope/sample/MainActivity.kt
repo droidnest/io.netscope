@@ -39,6 +39,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import io.netscope.NetScope
+import io.netscope.notification.NetScopeNotificationManager
 import io.netscope.ui.NetScopeActivity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -50,8 +51,16 @@ import okhttp3.RequestBody.Companion.toRequestBody
 
 class MainActivity : ComponentActivity() {
 
-    private val client: OkHttpClient by lazy {
-        OkHttpClient.Builder()
+    // Initialised eagerly in onCreate — NOT lazy — so that NetScope.repository
+    // is ready before NetScopeNotificationManager.init() is called.
+    private lateinit var client: OkHttpClient
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+
+        // 1. Build the interceptor first — this initialises NetScope.repository.
+        client = OkHttpClient.Builder()
             .addInterceptor(
                 NetScope.interceptor(this) {
                     maxTransactions(200)
@@ -59,11 +68,9 @@ class MainActivity : ComponentActivity() {
                 }
             )
             .build()
-    }
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        // 2. Now NetScope.repository is ready — safe to start the notification.
+        NetScopeNotificationManager.init(this, launchActivity = NetScopeActivity::class.java)
         setContent {
             MaterialTheme {
                 SampleScreen(client = client)

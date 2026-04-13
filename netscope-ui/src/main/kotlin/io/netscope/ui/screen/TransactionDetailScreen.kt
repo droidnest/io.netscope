@@ -38,8 +38,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.netscope.model.NetHeader
@@ -308,6 +312,7 @@ private fun HeaderTable(headers: List<NetHeader>) {
 
 @Composable
 private fun BodyView(body: String) {
+    val highlighted = remember(body) { body.highlightedBody() }
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -317,8 +322,7 @@ private fun BodyView(body: String) {
             .padding(12.dp),
     ) {
         Text(
-            text = body.tryPrettyPrintJson(),
-            color = Color(0xFFCDD6F4),
+            text = highlighted,
             fontSize = 11.sp,
             fontFamily = FontFamily.Monospace,
             lineHeight = 18.sp,
@@ -326,25 +330,127 @@ private fun BodyView(body: String) {
     }
 }
 
-private fun String.tryPrettyPrintJson(): String = try {
+// ── JSON syntax highlighting ──────────────────────────────────────────────────
+
+private val JsonKeyColor     = Color(0xFF7DD3FC) // sky-300 — keys
+private val JsonStringColor  = Color(0xFF86EFAC) // green-300 — string values
+private val JsonNumberColor  = Color(0xFFFBBF24) // amber-400 — numbers
+private val JsonKeywordColor = Color(0xFFA78BFA) // violet-400 — true / false / null
+private val JsonPunctColor   = Color(0xFF6B7FA3) // muted — { } [ ] : ,
+private val JsonDefaultColor = Color(0xFFCDD6F4) // plain text / fallback
+
+/**
+ * Returns an [AnnotatedString] with JSON syntax colouring, or a plain-coloured
+ * [AnnotatedString] for non-JSON bodies.
+ */
+private fun String.highlightedBody(): AnnotatedString {
     val trimmed = trim()
-    if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
-        // Basic pretty-print without external library
-        val sb = StringBuilder()
-        var indent = 0
-        var inString = false
-        for (char in trimmed) {
-            when {
-                char == '"' && !inString -> { inString = true; sb.append(char) }
-                char == '"' && inString -> { inString = false; sb.append(char) }
-                inString -> sb.append(char)
-                char == '{' || char == '[' -> { sb.append(char); sb.append('\n'); indent++; sb.append("  ".repeat(indent)) }
-                char == '}' || char == ']' -> { sb.append('\n'); indent--; sb.append("  ".repeat(indent)); sb.append(char) }
-                char == ',' -> { sb.append(char); sb.append('\n'); sb.append("  ".repeat(indent)) }
-                char == ':' -> sb.append(": ")
-                char != ' ' && char != '\n' && char != '\r' && char != '\t' -> sb.append(char)
+    val isJson = trimmed.startsWith("{") || trimmed.startsWith("[")
+    val pretty = if (isJson) trimmed.prettyPrintJson() else trimmed
+
+    return if (!isJson) {
+        buildAnnotatedString {
+            withStyle(SpanStyle(color = JsonDefaultColor)) { append(pretty) }
+        }
+    } else {
+        buildAnnotatedString { appendJsonHighlighted(pretty) }
+    }
+}
+
+/**
+ * Appends [json] to the receiver [AnnotatedString.Builder] character-by-character,
+ * applying colour spans per JSON token type.
+ *
+ * State machine tracks whether we're inside a string, and whether that string is
+ * a key (followed by `:`) or a value.
+ */
+private fun AnnotatedString.Builder.appendJsonHighlighted(json: String) {
+    var i = 0
+
+    fun peekIsColon(): Boolean {
+        var j = i
+        while (j < json.length && (json[j] == ' ' || json[j] == '\n' || json[j] == '\r' || json[j] == '\t')) j++
+        return j < json.length && json[j] == ':'
+    }
+
+    while (i < json.length) {
+        val ch = json[i]
+        when {
+            // ── String token ──────────────────────────────────────────────
+            ch == '"' -> {
+                val start = i
+                i++ // consume opening quote
+                while (i < json.length) {
+                    when {
+                        json[i] == '\\' -> i += 2            // skip escaped char
+                        json[i] == '"'  -> { i++; break }    // closing quote
+                        else            -> i++
+                    }
+                }
+                val raw = json.substring(start, i)
+                // A string is a key if what follows (ignoring whitespace) is ':'
+                val color = if (peekIsColon()) JsonKeyColor else JsonStringColor
+                withStyle(SpanStyle(color = color)) { append(raw) }
+            }
+
+            // ── Number ────────────────────────────────────────────────────
+            ch == '-' || ch.isDigit() -> {
+                val start = i
+                if (ch == '-') i++
+                while (i < json.length && (json[i].isDigit() || json[i] == '.' || json[i] in "eE+-")) i++
+                withStyle(SpanStyle(color = JsonNumberColor)) { append(json.substring(start, i)) }
+            }
+
+            // ── Keywords ──────────────────────────────────────────────────
+            json.startsWith("true", i) -> {
+                withStyle(SpanStyle(color = JsonKeywordColor)) { append("true") }; i += 4
+            }
+            json.startsWith("false", i) -> {
+                withStyle(SpanStyle(color = JsonKeywordColor)) { append("false") }; i += 5
+            }
+            json.startsWith("null", i) -> {
+                withStyle(SpanStyle(color = JsonKeywordColor)) { append("null") }; i += 4
+            }
+
+            // ── Punctuation ───────────────────────────────────────────────
+            ch in "{}[],:." -> {
+                withStyle(SpanStyle(color = JsonPunctColor)) { append(ch) }; i++
+            }
+
+            // ── Whitespace / everything else ──────────────────────────────
+            else -> {
+                withStyle(SpanStyle(color = JsonDefaultColor)) { append(ch) }; i++
             }
         }
-        sb.toString()
-    } else this
+    }
+}
+
+private fun String.prettyPrintJson(): String = try {
+    val sb = StringBuilder()
+    var indent = 0
+    var inString = false
+    var i = 0
+    while (i < length) {
+        val ch = this[i]
+        when {
+            ch == '"' && !inString -> { inString = true; sb.append(ch) }
+            ch == '"' && inString  -> { inString = false; sb.append(ch) }
+            ch == '\\' && inString -> { sb.append(ch); sb.append(this[++i]) }
+            inString               -> sb.append(ch)
+            ch == '{' || ch == '[' -> {
+                sb.append(ch); sb.append('\n')
+                indent++; sb.append("  ".repeat(indent))
+            }
+            ch == '}' || ch == ']' -> {
+                sb.append('\n'); indent--
+                sb.append("  ".repeat(indent)); sb.append(ch)
+            }
+            ch == ','              -> { sb.append(ch); sb.append('\n'); sb.append("  ".repeat(indent)) }
+            ch == ':'              -> sb.append(": ")
+            ch == ' ' || ch == '\n' || ch == '\r' || ch == '\t' -> { /* skip stale whitespace */ }
+            else                   -> sb.append(ch)
+        }
+        i++
+    }
+    sb.toString()
 } catch (_: Exception) { this }
