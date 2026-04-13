@@ -25,7 +25,7 @@ android {
 dependencies {
     // OkHttp — provided by consumer, not bundled
     compileOnly(libs.okhttp)
-
+    implementation(libs.gson)
     // Room
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)

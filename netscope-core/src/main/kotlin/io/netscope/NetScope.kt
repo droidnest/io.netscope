@@ -24,7 +24,7 @@ import io.netscope.interceptor.NetScopeInterceptor
  */
 object NetScope {
 
-    internal lateinit var repository: TransactionRepository
+    lateinit var repository: TransactionRepository
         private set
 
     private var initialized = false
