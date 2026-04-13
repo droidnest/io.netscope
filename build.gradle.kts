@@ -3,8 +3,10 @@ import com.vanniktech.maven.publish.SonatypeHost
 
 plugins {
     alias(libs.plugins.android.library) apply false
+    alias(libs.plugins.android.application) apply false
     alias(libs.plugins.ksp) apply false
     alias(libs.plugins.vanniktech.publish) apply false
+    alias(libs.plugins.kotlin.compose) apply false
 }
 
 val descriptions = mapOf(
@@ -19,7 +21,9 @@ subprojects {
         val artifactId = project.name
         extensions.configure<MavenPublishBaseExtension> {
             publishToMavenCentral(SonatypeHost.CENTRAL_PORTAL)
-            signAllPublications()
+            if (System.getenv("CI") == "true") {
+                signAllPublications()
+            }
             coordinates("io.github.nidhal92", artifactId, "0.1.0")
             // coordinates("io.netscope", artifactId, "0.1.0")
             pom {
