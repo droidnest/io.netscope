@@ -28,6 +28,13 @@ interface TransactionDao {
     @Query("SELECT COUNT(*) FROM transactions")
     suspend fun count(): Int
 
+    /** Updates only the network-phase timing columns for an existing transaction. */
+    @Query(
+        "UPDATE transactions SET dnsMs = :dnsMs, connectMs = :connectMs, " +
+        "sslMs = :sslMs, ttfbMs = :ttfbMs WHERE id = :id"
+    )
+    suspend fun updateTiming(id: Long, dnsMs: Long?, connectMs: Long?, sslMs: Long?, ttfbMs: Long?)
+
     /**
      * Prunes oldest transactions when the count exceeds [maxCount].
      * Called after each insert to enforce the configured limit.

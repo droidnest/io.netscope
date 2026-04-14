@@ -32,6 +32,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -52,6 +53,7 @@ import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
 import io.netscope.NetScope
 import io.netscope.notification.NetScopeNotificationManager
+import io.netscope.shake.NetScopeShakeDetector
 import io.netscope.ui.NetScopeActivity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -66,28 +68,50 @@ class MainActivity : ComponentActivity() {
     // Initialised eagerly in onCreate — NOT lazy — so that NetScope.repository
     // is ready before NetScopeNotificationManager.init() is called.
     private lateinit var client: OkHttpClient
+    private lateinit var shakeDetector: NetScopeShakeDetector
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
         // 1. Build the interceptor first — this initialises NetScope.repository.
+        val interceptor = NetScope.interceptor(this) {
+            maxTransactions(200)
+            redactHeaders("X-Api-Key")
+        }
+
+        // 2. Build the timing factory — must come after interceptor().
+        val timingFactory = NetScope.timingListenerFactory()
+
+        // 3. Build the OkHttp client with both interceptor and event listener.
         client = OkHttpClient.Builder()
-            .addInterceptor(
-                NetScope.interceptor(this) {
-                    maxTransactions(200)
-                    redactHeaders("X-Api-Key")
-                }
-            )
+            .addInterceptor(interceptor)
+            .eventListenerFactory(timingFactory)
             .build()
 
-        // 2. Now NetScope.repository is ready — safe to start the notification.
+        // 4. Now NetScope.repository is ready — safe to start the notification.
         NetScopeNotificationManager.init(this, launchActivity = NetScopeActivity::class.java)
+
+        // 5. Shake-to-open detector (lifecycle managed in onResume/onPause).
+        shakeDetector = NetScopeShakeDetector(this) {
+            runOnUiThread { NetScopeActivity.launch(this) }
+        }
+
         setContent {
             MaterialTheme {
                 SampleScreen(client = client)
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        shakeDetector.start()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        shakeDetector.stop()
     }
 }
 

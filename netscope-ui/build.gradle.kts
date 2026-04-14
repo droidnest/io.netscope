@@ -29,6 +29,7 @@ android {
 
 dependencies {
     api(project(":netscope-core"))
+    implementation(project(":netscope-export"))
 
     val composeBom = platform(libs.compose.bom)
     implementation(composeBom)
