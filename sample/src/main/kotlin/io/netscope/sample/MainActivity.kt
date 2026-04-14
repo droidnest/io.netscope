@@ -102,23 +102,23 @@ fun SampleScreen(client: OkHttpClient) {
         val maxWidthPx  = with(LocalDensity.current) { maxWidth.toPx() }
         val maxHeightPx = with(LocalDensity.current) { maxHeight.toPx() }
 
-        // FAB drag state — offset is relative to the default BottomEnd anchor
-        var offsetX  by remember { mutableFloatStateOf(0f) }
-        var offsetY  by remember { mutableFloatStateOf(0f) }
-        var fabSize  by remember { mutableStateOf(IntSize.Zero) }
-        val padPx    = with(LocalDensity.current) { 16.dp.toPx() }
+        // FAB drag state — offset is relative to the BottomEnd anchor
+        var offsetX by remember { mutableFloatStateOf(0f) }
+        var offsetY by remember { mutableFloatStateOf(0f) }
+        var fabSize by remember { mutableStateOf(IntSize.Zero) }
+        val padPx   = with(LocalDensity.current) { 16.dp.toPx() }
 
         Scaffold(
             topBar = { TopAppBar(title = { Text("NetScope Sample") }) },
         ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .padding(innerPadding)
-                .padding(horizontal = 16.dp)
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
+            Column(
+                modifier = Modifier
+                    .padding(innerPadding)
+                    .padding(horizontal = 16.dp)
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
             // Status card
             Card(
                 modifier = Modifier
@@ -238,7 +238,8 @@ fun SampleScreen(client: OkHttpClient) {
                     lastResult = "Fired ${urls.size} requests — open NetScope to inspect"
                 }
             }
-        }
+            }
+        } // end Scaffold
 
         // ── Draggable debug FAB ───────────────────────────────────────────────
         Box(
