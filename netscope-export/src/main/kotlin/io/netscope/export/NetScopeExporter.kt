@@ -23,6 +23,8 @@ import java.util.TimeZone
  */
 object NetScopeExporter {
 
+    private val gson = GsonBuilder().setPrettyPrinting().create()
+
     // ── cURL ──────────────────────────────────────────────────────────────────
 
     /**
@@ -120,7 +122,7 @@ object NetScopeExporter {
             ),
         )
 
-        return GsonBuilder().setPrettyPrinting().create().toJson(har)
+        return gson.toJson(har)
     }
 
     // ── Android helpers ───────────────────────────────────────────────────────

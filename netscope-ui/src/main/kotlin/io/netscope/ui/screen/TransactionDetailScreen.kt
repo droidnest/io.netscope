@@ -259,15 +259,17 @@ private val PhaseTtfb    = Color(0xFFFBBF24) // amber-400
 
 @Composable
 private fun TimingTimeline(tx: NetTransaction) {
-    val segments = buildList {
-        tx.dnsMs?.let     { add(PhaseSegment("DNS",     it, PhaseDns))     }
-        tx.connectMs?.let { add(PhaseSegment("Connect", it, PhaseConnect)) }
-        tx.sslMs?.let     { add(PhaseSegment("TLS",     it, PhaseSsl))     }
-        tx.ttfbMs?.let    { add(PhaseSegment("TTFB",    it, PhaseTtfb))    }
+    val segments = remember(tx.dnsMs, tx.connectMs, tx.sslMs, tx.ttfbMs) {
+        buildList {
+            tx.dnsMs?.let     { add(PhaseSegment("DNS",     it, PhaseDns))     }
+            tx.connectMs?.let { add(PhaseSegment("Connect", it, PhaseConnect)) }
+            tx.sslMs?.let     { add(PhaseSegment("TLS",     it, PhaseSsl))     }
+            tx.ttfbMs?.let    { add(PhaseSegment("TTFB",    it, PhaseTtfb))    }
+        }
     }
     if (segments.isEmpty()) return
 
-    val total = segments.sumOf { it.durationMs }.coerceAtLeast(1L)
+    val total = remember(segments) { segments.sumOf { it.durationMs }.coerceAtLeast(1L) }
 
     // Segmented bar
     Row(
@@ -427,12 +429,13 @@ private fun HeaderTable(headers: List<NetHeader>) {
 @Composable
 private fun BodyView(body: String) {
     val highlighted = remember(body) { body.highlightedBody() }
+    val scrollState = rememberScrollState()
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(8.dp))
             .background(Color(0xFF0A0E1A))
-            .horizontalScroll(rememberScrollState())
+            .horizontalScroll(scrollState)
             .padding(12.dp),
     ) {
         Text(

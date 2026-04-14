@@ -30,7 +30,7 @@ object NetScope {
 
     private var initialized = false
 
-    /** The most-recently created interceptor. Used to wire the timing factory. */
+    @Volatile
     private var activeInterceptor: NetScopeInterceptor? = null
 
     /**
