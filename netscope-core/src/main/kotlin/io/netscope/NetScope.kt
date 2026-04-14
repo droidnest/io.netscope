@@ -5,6 +5,7 @@ import io.netscope.data.db.NetScopeDatabase
 import io.netscope.data.repository.TransactionRepositoryImpl
 import io.netscope.domain.repository.TransactionRepository
 import io.netscope.interceptor.NetScopeInterceptor
+import io.netscope.interceptor.NetScopeTimingListenerFactory
 
 /**
  * Main entry point for the NetScope library.
@@ -29,6 +30,9 @@ object NetScope {
 
     private var initialized = false
 
+    /** The most-recently created interceptor. Used to wire the timing factory. */
+    private var activeInterceptor: NetScopeInterceptor? = null
+
     /**
      * Creates a configured [NetScopeInterceptor] and initialises the library.
      * Safe to call multiple times — subsequent calls reconfigure without data loss.
@@ -39,7 +43,31 @@ object NetScope {
     ): NetScopeInterceptor {
         val config = ConfigBuilder().apply(block).build()
         init(context.applicationContext, config)
-        return NetScopeInterceptor(repository, config)
+        return NetScopeInterceptor(repository, config).also { activeInterceptor = it }
+    }
+
+    /**
+     * Returns an [okhttp3.EventListener.Factory] that captures per-phase network
+     * timing (DNS / TCP connect / TLS / TTFB) and writes it to the repository.
+     *
+     * Add this to your `OkHttpClient` alongside [interceptor]:
+     * ```kotlin
+     * val timingFactory = NetScope.timingListenerFactory()
+     * OkHttpClient.Builder()
+     *     .addInterceptor(NetScope.interceptor(context) { … })
+     *     .eventListenerFactory(timingFactory)
+     *     .build()
+     * ```
+     *
+     * **Must be called after [interceptor]** so that the repository is initialised.
+     */
+    fun timingListenerFactory(): NetScopeTimingListenerFactory {
+        check(isInitialized()) {
+            "Call NetScope.interceptor(context) before NetScope.timingListenerFactory()."
+        }
+        return NetScopeTimingListenerFactory(repository).also { factory ->
+            activeInterceptor?.timingFactory = factory
+        }
     }
 
     private fun init(context: Context, config: NetScopeConfig) {

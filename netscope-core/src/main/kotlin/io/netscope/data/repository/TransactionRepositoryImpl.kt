@@ -30,5 +30,9 @@ internal class TransactionRepositoryImpl(
     override suspend fun getById(id: Long): NetTransaction? =
         dao.getById(id)?.toDomain()
 
+    override suspend fun updateTiming(
+        id: Long, dnsMs: Long?, connectMs: Long?, sslMs: Long?, ttfbMs: Long?,
+    ) = dao.updateTiming(id, dnsMs, connectMs, sslMs, ttfbMs)
+
     override suspend fun clearAll() = dao.deleteAll()
 }

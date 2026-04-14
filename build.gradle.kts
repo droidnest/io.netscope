@@ -13,6 +13,7 @@ val descriptions = mapOf(
     "netscope-core"         to "NetScope — Core interceptor and storage module.",
     "netscope-ui"           to "NetScope — Compose UI module.",
     "netscope-notification" to "NetScope — Persistent notification with live request stats.",
+    "netscope-export"       to "NetScope — Export transactions as cURL or HAR.",
     "netscope-no-op"        to "NetScope — Release no-op stub, zero overhead.",
 )
 

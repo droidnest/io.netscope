@@ -1,6 +1,8 @@
 package io.netscope
 
 import android.content.Context
+import okhttp3.Call
+import okhttp3.EventListener
 import okhttp3.Interceptor
 import okhttp3.Response
 
@@ -23,6 +25,10 @@ object NetScope {
         context: Context,
         block: ConfigBuilder.() -> Unit = {},
     ): Interceptor = NoOpInterceptor()
+
+    /** No-op: returns a pass-through [EventListener.Factory]. */
+    fun timingListenerFactory(): EventListener.Factory =
+        EventListener.Factory { EventListener.NONE }
 
     fun isInitialized(): Boolean = false
 

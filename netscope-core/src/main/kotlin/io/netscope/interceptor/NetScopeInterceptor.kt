@@ -29,6 +29,8 @@ import java.nio.charset.Charset
 class NetScopeInterceptor internal constructor(
     private val repository: TransactionRepository,
     private val config: NetScopeConfig,
+    /** Optional timing factory — when set, the interceptor registers call→id mappings. */
+    internal var timingFactory: NetScopeTimingListenerFactory? = null,
 ) : Interceptor {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -53,6 +55,9 @@ class NetScopeInterceptor internal constructor(
 
         // Persist request immediately so it appears in UI before response
         val transactionId = saveSync(transaction)
+
+        // Register call → id so the EventListener can write timing data later
+        timingFactory?.pendingIds?.put(chain.call(), transactionId)
 
         return try {
             val response = chain.proceed(request)

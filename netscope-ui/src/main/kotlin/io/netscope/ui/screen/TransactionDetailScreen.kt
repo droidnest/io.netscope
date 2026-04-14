@@ -11,11 +11,16 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Divider
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -38,6 +43,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -46,6 +52,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import io.netscope.export.NetScopeExporter
 import io.netscope.model.NetHeader
 import io.netscope.model.NetTransaction
 import io.netscope.ui.component.MethodChip
@@ -70,6 +77,7 @@ fun TransactionDetailScreen(
     val transaction by viewModel.selectedTransaction.collectAsState()
     var selectedTab by remember { mutableIntStateOf(0) }
     val tabs = listOf("Overview", "Request", "Response")
+    val context = LocalContext.current
 
     transaction?.let { tx ->
         Scaffold(
@@ -90,6 +98,36 @@ fun TransactionDetailScreen(
                                 imageVector = Icons.Default.ArrowBack,
                                 contentDescription = "Back",
                                 tint = Color.White,
+                            )
+                        }
+                    },
+                    actions = {
+                        // Copy as cURL
+                        IconButton(onClick = {
+                            NetScopeExporter.copyToClipboard(
+                                context = context,
+                                text = NetScopeExporter.toCurl(tx),
+                                label = "cURL command",
+                            )
+                        }) {
+                            Icon(
+                                imageVector = Icons.Default.ContentCopy,
+                                contentDescription = "Copy as cURL",
+                                tint = NetScopeMuted,
+                            )
+                        }
+                        // Share as cURL
+                        IconButton(onClick = {
+                            NetScopeExporter.share(
+                                context = context,
+                                text = NetScopeExporter.toCurl(tx),
+                                chooserTitle = "Share request as cURL",
+                            )
+                        }) {
+                            Icon(
+                                imageVector = Icons.Default.Share,
+                                contentDescription = "Share as cURL",
+                                tint = NetScopeMuted,
                             )
                         }
                     },
@@ -177,6 +215,16 @@ private fun OverviewTab(tx: NetTransaction) {
             tx.responseDate?.let { InfoRow("Completed", dateFormat.format(Date(it))) }
             tx.durationMs?.let { InfoRow("Duration", "${it}ms") }
         }
+
+        // ── Network phase timeline (only when EventListener data is present) ──
+        val hasPhaseData = tx.dnsMs != null || tx.connectMs != null ||
+                tx.sslMs != null || tx.ttfbMs != null
+        if (hasPhaseData) {
+            SectionCard(title = "Network Phases") {
+                TimingTimeline(tx)
+            }
+        }
+
         SectionCard(title = "Request") {
             InfoRow("Method", tx.method)
             InfoRow("URL", tx.url)
@@ -192,6 +240,72 @@ private fun OverviewTab(tx: NetTransaction) {
             SectionCard(title = "Error") {
                 Text(text = it, color = Color(0xFFFF4D6A), fontSize = 12.sp, fontFamily = FontFamily.Monospace)
             }
+        }
+    }
+}
+
+// ── Network phase timeline ────────────────────────────────────────────────────
+
+private data class PhaseSegment(
+    val label: String,
+    val durationMs: Long,
+    val color: Color,
+)
+
+private val PhaseDns     = Color(0xFF7DD3FC) // sky-300
+private val PhaseConnect = Color(0xFF86EFAC) // green-300
+private val PhaseSsl     = Color(0xFFA78BFA) // violet-400
+private val PhaseTtfb    = Color(0xFFFBBF24) // amber-400
+
+@Composable
+private fun TimingTimeline(tx: NetTransaction) {
+    val segments = buildList {
+        tx.dnsMs?.let     { add(PhaseSegment("DNS",     it, PhaseDns))     }
+        tx.connectMs?.let { add(PhaseSegment("Connect", it, PhaseConnect)) }
+        tx.sslMs?.let     { add(PhaseSegment("TLS",     it, PhaseSsl))     }
+        tx.ttfbMs?.let    { add(PhaseSegment("TTFB",    it, PhaseTtfb))    }
+    }
+    if (segments.isEmpty()) return
+
+    val total = segments.sumOf { it.durationMs }.coerceAtLeast(1L)
+
+    // Segmented bar
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(10.dp)
+            .clip(RoundedCornerShape(5.dp)),
+    ) {
+        segments.forEach { seg ->
+            val fraction = seg.durationMs.toFloat() / total
+            Box(
+                modifier = Modifier
+                    .weight(fraction)
+                    .fillMaxSize()
+                    .background(seg.color),
+            )
+        }
+    }
+
+    Spacer(Modifier.height(10.dp))
+
+    // Legend rows
+    segments.forEach { seg ->
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 2.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(8.dp)
+                    .clip(CircleShape)
+                    .background(seg.color),
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(text = seg.label, color = NetScopeMuted, fontSize = 11.sp, modifier = Modifier.weight(1f))
+            Text(text = "${seg.durationMs}ms", color = Color.White, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
         }
     }
 }
