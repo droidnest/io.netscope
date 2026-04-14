@@ -56,8 +56,7 @@ class NetScopeInterceptor internal constructor(
         // Persist request immediately so it appears in UI before response
         val transactionId = saveSync(transaction)
 
-        // Register call → id so the EventListener can write timing data later
-        timingFactory?.pendingIds?.put(chain.call(), transactionId)
+        timingFactory?.register(chain.call(), transactionId)
 
         return try {
             val response = chain.proceed(request)

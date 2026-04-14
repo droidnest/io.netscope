@@ -5,7 +5,6 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
-import kotlin.math.sqrt
 
 /**
  * Detects a shake gesture using the accelerometer and invokes [onShake].
@@ -40,7 +39,12 @@ class NetScopeShakeDetector(
     private val accelerometer: Sensor? =
         sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
 
-    // Cooldown: ignore further shakes for 1 s after one is fired
+    // Pre-computed: avoids sqrt() on the 100Hz sensor hot-path.
+    // Original condition: sqrt(|a|) - GRAVITY_EARTH > threshold
+    // Equivalent:         |a|² > (GRAVITY_EARTH + threshold)²
+    private val magnitudeThresholdSquared =
+        (SensorManager.GRAVITY_EARTH + threshold) * (SensorManager.GRAVITY_EARTH + threshold)
+
     private var lastShakeTime = 0L
 
     private val listener = object : SensorEventListener {
@@ -49,10 +53,8 @@ class NetScopeShakeDetector(
             val y = event.values[1]
             val z = event.values[2]
 
-            // Remove gravity to get the actual movement acceleration
-            val gForce = sqrt(x * x + y * y + z * z) - SensorManager.GRAVITY_EARTH
-
-            if (gForce > threshold) {
+            val magnitudeSquared = x * x + y * y + z * z
+            if (magnitudeSquared > magnitudeThresholdSquared) {
                 val now = System.currentTimeMillis()
                 if (now - lastShakeTime > COOLDOWN_MS) {
                     lastShakeTime = now

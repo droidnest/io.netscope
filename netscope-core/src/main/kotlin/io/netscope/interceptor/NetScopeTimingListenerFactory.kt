@@ -40,10 +40,15 @@ class NetScopeTimingListenerFactory internal constructor(
     private val repository: TransactionRepository,
 ) : EventListener.Factory {
 
-    // Shared map: Call → DB row id.  Written by the interceptor, read by the listener.
-    internal val pendingIds: ConcurrentHashMap<Call, Long> = ConcurrentHashMap()
+    // Call → DB row id.  Written by the interceptor via register(), read by the listener.
+    private val pendingIds: ConcurrentHashMap<Call, Long> = ConcurrentHashMap()
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    /** Called by [NetScopeInterceptor] after the transaction row is inserted. */
+    internal fun register(call: Call, transactionId: Long) {
+        pendingIds[call] = transactionId
+    }
 
     override fun create(call: Call): EventListener =
         NetScopeTimingListener(call, pendingIds, scope, repository)
