@@ -4,11 +4,15 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -29,15 +33,23 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
 import io.netscope.NetScope
 import io.netscope.notification.NetScopeNotificationManager
 import io.netscope.ui.NetScopeActivity
@@ -86,18 +98,19 @@ fun SampleScreen(client: OkHttpClient) {
     val scope = rememberCoroutineScope()
     var lastResult by remember { mutableStateOf("Tap a button to fire a request, then open NetScope to inspect it.") }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(title = { Text("NetScope Sample") })
-        },
-        floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = { NetScopeActivity.launch(context) },
-                icon = { Icon(Icons.Default.BugReport, contentDescription = null) },
-                text = { Text("Open NetScope") },
-            )
-        }
-    ) { innerPadding ->
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val maxWidthPx  = with(LocalDensity.current) { maxWidth.toPx() }
+        val maxHeightPx = with(LocalDensity.current) { maxHeight.toPx() }
+
+        // FAB drag state — offset is relative to the default BottomEnd anchor
+        var offsetX  by remember { mutableFloatStateOf(0f) }
+        var offsetY  by remember { mutableFloatStateOf(0f) }
+        var fabSize  by remember { mutableStateOf(IntSize.Zero) }
+        val padPx    = with(LocalDensity.current) { 16.dp.toPx() }
+
+        Scaffold(
+            topBar = { TopAppBar(title = { Text("NetScope Sample") }) },
+        ) { innerPadding ->
         Column(
             modifier = Modifier
                 .padding(innerPadding)
@@ -225,6 +238,35 @@ fun SampleScreen(client: OkHttpClient) {
                     lastResult = "Fired ${urls.size} requests — open NetScope to inspect"
                 }
             }
+        }
+
+        // ── Draggable debug FAB ───────────────────────────────────────────────
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(16.dp)
+                .offset { IntOffset(offsetX.roundToInt(), offsetY.roundToInt()) }
+                .onSizeChanged { fabSize = it }
+                .pointerInput(Unit) {
+                    detectDragGestures { change, drag ->
+                        change.consume()
+                        // Clamp so the FAB never leaves the visible area
+                        offsetX = (offsetX + drag.x).coerceIn(
+                            -(maxWidthPx - fabSize.width - padPx),
+                            0f,
+                        )
+                        offsetY = (offsetY + drag.y).coerceIn(
+                            -(maxHeightPx - fabSize.height - padPx),
+                            0f,
+                        )
+                    }
+                },
+        ) {
+            ExtendedFloatingActionButton(
+                onClick = { NetScopeActivity.launch(context) },
+                icon = { Icon(Icons.Default.BugReport, contentDescription = null) },
+                text = { Text("Open NetScope") },
+            )
         }
     }
 }
