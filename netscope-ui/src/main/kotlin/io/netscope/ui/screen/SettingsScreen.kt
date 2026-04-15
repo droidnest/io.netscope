@@ -74,17 +74,25 @@ import io.netscope.ui.component.NetScopeDarkBackground
 import io.netscope.ui.component.NetScopeMuted
 import io.netscope.ui.component.NetScopeSurface
 import io.netscope.ui.preferences.NetScopePreferences
+import io.netscope.ui.preferences.NotificationStyle
 
-// ── Options ───────────────────────────────────────────────────────────────────
+// ── Picker options ────────────────────────────────────────────────────────────
 
-private val MAX_TX_OPTIONS = listOf(100, 250, 500, 1_000, 2_000, 5_000)
+private val MAX_TX_OPTIONS = listOf(
+    100   to "100",
+    250   to "250",
+    500   to "500",
+    1_000 to "1 000",
+    2_000 to "2 000",
+    5_000 to "5 000",
+)
 
 private val BODY_SIZE_OPTIONS = listOf(
-    50_000L        to "50 KB",
-    100_000L       to "100 KB",
-    250_000L       to "250 KB",
-    500_000L       to "500 KB",
-    1_048_576L     to "1 MB",
+    50_000L     to "50 KB",
+    100_000L    to "100 KB",
+    250_000L    to "250 KB",
+    500_000L    to "500 KB",
+    1_048_576L  to "1 MB",
 )
 
 // ── Screen ────────────────────────────────────────────────────────────────────
@@ -98,17 +106,18 @@ fun SettingsScreen(
     val context = LocalContext.current
     val prefs = remember { NetScopePreferences(context) }
 
-    // Local state — seeded from persisted prefs
-    var maxTransactions      by rememberSaveable { mutableStateOf(prefs.maxTransactions) }
-    var maxBodySize          by rememberSaveable { mutableStateOf(prefs.maxBodySizeBytes) }
-    var alwaysReadBody       by rememberSaveable { mutableStateOf(prefs.alwaysReadResponseBody) }
-    var showNotification     by rememberSaveable { mutableStateOf(prefs.showNotification) }
-    var redactedHeaders      by rememberSaveable { mutableStateOf(prefs.redactedHeaders) }
-    var showClearDialog      by remember { mutableStateOf(false) }
-    var showAddHeaderField   by remember { mutableStateOf(false) }
-    var addHeaderInput       by remember { mutableStateOf("") }
-    val focusRequester       = remember { FocusRequester() }
-    val focusManager         = LocalFocusManager.current
+    var maxTransactions    by rememberSaveable { mutableStateOf(prefs.maxTransactions) }
+    var maxBodySize        by rememberSaveable { mutableStateOf(prefs.maxBodySizeBytes) }
+    var alwaysReadBody     by rememberSaveable { mutableStateOf(prefs.alwaysReadResponseBody) }
+    var redactedHeaders    by rememberSaveable { mutableStateOf(prefs.redactedHeaders) }
+    var shakeToOpen        by rememberSaveable { mutableStateOf(prefs.shakeToOpen) }
+    var notifStyle         by rememberSaveable { mutableStateOf(prefs.notificationStyle) }
+
+    var showClearDialog    by remember { mutableStateOf(false) }
+    var showAddHeaderField by remember { mutableStateOf(false) }
+    var addHeaderInput     by remember { mutableStateOf("") }
+    val focusRequester     = remember { FocusRequester() }
+    val focusManager       = LocalFocusManager.current
 
     Scaffold(
         topBar = {
@@ -146,35 +155,30 @@ fun SettingsScreen(
 
             // ── Capture ───────────────────────────────────────────────────────
             SettingsSection(title = "Capture") {
-                // Max transactions
+
+                // Max transaction count
                 SettingsRow(
-                    title = "Max transactions",
+                    title = "Max transaction count",
                     subtitle = "Oldest entries are pruned once this limit is reached.",
                 ) {
-                    ChipSelector(
-                        options = MAX_TX_OPTIONS.map { it to formatCount(it) },
+                    OptionChips(
+                        options = MAX_TX_OPTIONS,
                         selected = maxTransactions,
-                        onSelect = { v ->
-                            maxTransactions = v
-                            prefs.maxTransactions = v
-                        },
+                        onSelect = { v -> maxTransactions = v; prefs.maxTransactions = v },
                     )
                 }
 
                 SettingsDivider()
 
-                // Max body size
+                // Body size limit
                 SettingsRow(
-                    title = "Max body size",
+                    title = "Body size limit",
                     subtitle = "Request and response bodies are truncated beyond this size.",
                 ) {
-                    ChipSelector(
+                    OptionChips(
                         options = BODY_SIZE_OPTIONS,
                         selected = maxBodySize,
-                        onSelect = { v ->
-                            maxBodySize = v
-                            prefs.maxBodySizeBytes = v
-                        },
+                        onSelect = { v -> maxBodySize = v; prefs.maxBodySizeBytes = v },
                     )
                 }
 
@@ -187,10 +191,7 @@ fun SettingsScreen(
                     trailing = {
                         NetScopeSwitch(
                             checked = alwaysReadBody,
-                            onCheckedChange = { v ->
-                                alwaysReadBody = v
-                                prefs.alwaysReadResponseBody = v
-                            },
+                            onCheckedChange = { v -> alwaysReadBody = v; prefs.alwaysReadResponseBody = v },
                         )
                     },
                 )
@@ -199,8 +200,8 @@ fun SettingsScreen(
             // ── Privacy ───────────────────────────────────────────────────────
             SettingsSection(title = "Privacy") {
                 SettingsRow(
-                    title = "Redacted headers",
-                    subtitle = "Values are replaced with ██████ in the UI and exports.",
+                    title = "Header redaction rules",
+                    subtitle = "Matched header values are replaced with ██████ in the UI and all exports.",
                 ) {
                     RedactedHeadersEditor(
                         headers = redactedHeaders,
@@ -235,19 +236,31 @@ fun SettingsScreen(
 
             // ── Interface ─────────────────────────────────────────────────────
             SettingsSection(title = "Interface") {
+
+                // Shake-to-open gesture
                 SettingsRow(
-                    title = "Persistent notification",
-                    subtitle = "Show live request stats in the status bar.",
+                    title = "Shake-to-open gesture",
+                    subtitle = "Shake the device to launch the NetScope transaction list.",
                     trailing = {
                         NetScopeSwitch(
-                            checked = showNotification,
-                            onCheckedChange = { v ->
-                                showNotification = v
-                                prefs.showNotification = v
-                            },
+                            checked = shakeToOpen,
+                            onCheckedChange = { v -> shakeToOpen = v; prefs.shakeToOpen = v },
                         )
                     },
                 )
+
+                SettingsDivider()
+
+                // Notification style
+                SettingsRow(
+                    title = "Notification style",
+                    subtitle = "Controls how much information appears in the status-bar notification.",
+                ) {
+                    NotificationStylePicker(
+                        selected = notifStyle,
+                        onSelect = { v -> notifStyle = v; prefs.notificationStyle = v },
+                    )
+                }
             }
 
             // ── About ─────────────────────────────────────────────────────────
@@ -255,7 +268,7 @@ fun SettingsScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 4.dp),
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
@@ -266,6 +279,7 @@ fun SettingsScreen(
                             fontSize = 14.sp,
                             fontWeight = FontWeight.SemiBold,
                         )
+                        Spacer(Modifier.height(2.dp))
                         Text(
                             text = "Network inspector for Android",
                             color = NetScopeMuted,
@@ -323,13 +337,13 @@ fun SettingsScreen(
         }
     }
 
-    // ── Clear all confirmation dialog ─────────────────────────────────────────
+    // ── Confirmation dialog ───────────────────────────────────────────────────
     if (showClearDialog) {
         AlertDialog(
             onDismissRequest = { showClearDialog = false },
             containerColor = Color(0xFF1A2235),
             title = {
-                Text(text = "Clear all transactions?", color = Color.White, fontWeight = FontWeight.SemiBold)
+                Text("Clear all transactions?", color = Color.White, fontWeight = FontWeight.SemiBold)
             },
             text = {
                 Text(
@@ -339,13 +353,7 @@ fun SettingsScreen(
                 )
             },
             confirmButton = {
-                TextButton(
-                    onClick = {
-                        showClearDialog = false
-                        onClearAll()
-                        onBack()
-                    },
-                ) {
+                TextButton(onClick = { showClearDialog = false; onClearAll(); onBack() }) {
                     Text("Clear all", color = Color(0xFFFF4D6A), fontWeight = FontWeight.SemiBold)
                 }
             },
@@ -361,11 +369,8 @@ fun SettingsScreen(
 // ── Section container ─────────────────────────────────────────────────────────
 
 @Composable
-private fun SettingsSection(
-    title: String,
-    content: @Composable () -> Unit,
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
+private fun SettingsSection(title: String, content: @Composable () -> Unit) {
+    Column {
         Text(
             text = title.uppercase(),
             color = NetScopeMuted,
@@ -385,7 +390,7 @@ private fun SettingsSection(
     }
 }
 
-// ── Row variants ──────────────────────────────────────────────────────────────
+// ── Row layout ────────────────────────────────────────────────────────────────
 
 @Composable
 private fun SettingsRow(
@@ -432,11 +437,11 @@ private fun SettingsDivider() {
     )
 }
 
-// ── Chip selector ─────────────────────────────────────────────────────────────
+// ── Generic option chip row ───────────────────────────────────────────────────
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun <T> ChipSelector(
+private fun <T> OptionChips(
     options: List<Pair<T, String>>,
     selected: T,
     onSelect: (T) -> Unit,
@@ -446,16 +451,14 @@ private fun <T> ChipSelector(
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         options.forEach { (value, label) ->
-            val isSelected = value == selected
+            val active = value == selected
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(20.dp))
-                    .background(
-                        if (isSelected) NetScopeAccent.copy(alpha = 0.15f) else Color(0xFF0F1929),
-                    )
+                    .background(if (active) NetScopeAccent.copy(0.15f) else Color(0xFF0F1929))
                     .border(
                         0.5.dp,
-                        if (isSelected) NetScopeAccent.copy(alpha = 0.55f) else NetScopeBorder,
+                        if (active) NetScopeAccent.copy(0.55f) else NetScopeBorder,
                         RoundedCornerShape(20.dp),
                     )
                     .clickable { onSelect(value) }
@@ -464,11 +467,64 @@ private fun <T> ChipSelector(
             ) {
                 Text(
                     text = label,
-                    color = if (isSelected) NetScopeAccent else NetScopeMuted,
+                    color = if (active) NetScopeAccent else NetScopeMuted,
                     fontSize = 11.sp,
-                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                    fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
                     fontFamily = FontFamily.Monospace,
                 )
+            }
+        }
+    }
+}
+
+// ── Notification style picker ─────────────────────────────────────────────────
+
+@Composable
+private fun NotificationStylePicker(
+    selected: NotificationStyle,
+    onSelect: (NotificationStyle) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        NotificationStyle.entries.forEach { style ->
+            val active = style == selected
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(
+                        if (active) NetScopeAccent.copy(alpha = 0.10f) else Color(0xFF0F1929),
+                    )
+                    .border(
+                        0.5.dp,
+                        if (active) NetScopeAccent.copy(alpha = 0.40f) else NetScopeBorder,
+                        RoundedCornerShape(8.dp),
+                    )
+                    .clickable { onSelect(style) }
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = style.label,
+                        color = if (active) NetScopeAccent else Color.White,
+                        fontSize = 13.sp,
+                        fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
+                    )
+                    Text(
+                        text = style.description,
+                        color = NetScopeMuted,
+                        fontSize = 11.sp,
+                    )
+                }
+                if (active) {
+                    Icon(
+                        imageVector = Icons.Default.Check,
+                        contentDescription = null,
+                        tint = NetScopeAccent,
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
             }
         }
     }
@@ -492,7 +548,6 @@ private fun RedactedHeadersEditor(
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        // Existing header chips
         headers.sorted().forEach { header ->
             Row(
                 modifier = Modifier
@@ -508,10 +563,7 @@ private fun RedactedHeadersEditor(
                     fontSize = 11.sp,
                     fontFamily = FontFamily.Monospace,
                 )
-                IconButton(
-                    onClick = { onRemove(header) },
-                    modifier = Modifier.size(18.dp),
-                ) {
+                IconButton(onClick = { onRemove(header) }, modifier = Modifier.size(18.dp)) {
                     Icon(
                         imageVector = Icons.Default.Close,
                         contentDescription = "Remove $header",
@@ -522,7 +574,6 @@ private fun RedactedHeadersEditor(
             }
         }
 
-        // Add button
         if (!showAddField) {
             Box(
                 modifier = Modifier
@@ -537,19 +588,13 @@ private fun RedactedHeadersEditor(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = "Add header",
-                        tint = NetScopeMuted,
-                        modifier = Modifier.size(12.dp),
-                    )
+                    Icon(Icons.Default.Add, contentDescription = null, tint = NetScopeMuted, modifier = Modifier.size(12.dp))
                     Text(text = "Add", color = NetScopeMuted, fontSize = 11.sp)
                 }
             }
         }
     }
 
-    // Inline add field — animates in below the chips
     AnimatedVisibility(
         visible = showAddField,
         enter = expandVertically(tween(200)) + fadeIn(tween(200)),
@@ -565,11 +610,7 @@ private fun RedactedHeadersEditor(
             BasicTextField(
                 value = addInput,
                 onValueChange = onAddInputChange,
-                textStyle = TextStyle(
-                    color = Color.White,
-                    fontSize = 12.sp,
-                    fontFamily = FontFamily.Monospace,
-                ),
+                textStyle = TextStyle(color = Color.White, fontSize = 12.sp, fontFamily = FontFamily.Monospace),
                 cursorBrush = SolidColor(NetScopeAccent),
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
@@ -581,49 +622,26 @@ private fun RedactedHeadersEditor(
                     .background(Color(0xFF0A0E1A))
                     .border(0.5.dp, NetScopeBorder, RoundedCornerShape(8.dp))
                     .padding(horizontal = 12.dp, vertical = 8.dp),
-                decorationBox = { innerTextField ->
+                decorationBox = { inner ->
                     Box {
                         if (addInput.isEmpty()) {
-                            Text(
-                                text = "e.g. X-Api-Key",
-                                color = NetScopeMuted,
-                                fontSize = 12.sp,
-                                fontFamily = FontFamily.Monospace,
-                            )
+                            Text(text = "e.g. X-Api-Key", color = NetScopeMuted, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
                         }
-                        innerTextField()
+                        inner()
                     }
                 },
             )
-            // Confirm
             IconButton(
                 onClick = onConfirmAdd,
                 modifier = Modifier
                     .size(34.dp)
                     .clip(RoundedCornerShape(8.dp))
-                    .background(
-                        if (addInput.isNotBlank()) NetScopeAccent.copy(alpha = 0.15f)
-                        else Color.Transparent,
-                    ),
+                    .background(if (addInput.isNotBlank()) NetScopeAccent.copy(0.15f) else Color.Transparent),
             ) {
-                Icon(
-                    imageVector = Icons.Default.Check,
-                    contentDescription = "Confirm",
-                    tint = if (addInput.isNotBlank()) NetScopeAccent else NetScopeMuted,
-                    modifier = Modifier.size(16.dp),
-                )
+                Icon(Icons.Default.Check, contentDescription = "Confirm", tint = if (addInput.isNotBlank()) NetScopeAccent else NetScopeMuted, modifier = Modifier.size(16.dp))
             }
-            // Cancel
-            IconButton(
-                onClick = onAddToggle,
-                modifier = Modifier.size(34.dp),
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Close,
-                    contentDescription = "Cancel",
-                    tint = NetScopeMuted,
-                    modifier = Modifier.size(16.dp),
-                )
+            IconButton(onClick = onAddToggle, modifier = Modifier.size(34.dp)) {
+                Icon(Icons.Default.Close, contentDescription = "Cancel", tint = NetScopeMuted, modifier = Modifier.size(16.dp))
             }
         }
     }
@@ -632,10 +650,7 @@ private fun RedactedHeadersEditor(
 // ── Switch ────────────────────────────────────────────────────────────────────
 
 @Composable
-private fun NetScopeSwitch(
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-) {
+private fun NetScopeSwitch(checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
     Switch(
         checked = checked,
         onCheckedChange = onCheckedChange,
@@ -649,8 +664,3 @@ private fun NetScopeSwitch(
         ),
     )
 }
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-private fun formatCount(n: Int): String =
-    if (n >= 1_000) "${n / 1_000}k" else "$n"
