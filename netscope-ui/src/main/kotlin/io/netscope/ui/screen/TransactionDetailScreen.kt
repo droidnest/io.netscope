@@ -1,5 +1,12 @@
 package io.netscope.ui.screen
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -18,18 +25,22 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.material3.Divider
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.ScrollableTabRow
+import androidx.compose.material3.Snackbar
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRowDefaults
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
@@ -42,6 +53,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -68,6 +80,7 @@ import io.netscope.ui.component.NetScopeSurface
 import io.netscope.ui.component.StatusBadge
 import io.netscope.ui.component.color
 import io.netscope.ui.component.formatBytes
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -80,12 +93,38 @@ fun TransactionDetailScreen(
 ) {
     val transaction by viewModel.selectedTransaction.collectAsState()
     var selectedTab by remember { mutableIntStateOf(0) }
+    var previousTab by remember { mutableIntStateOf(0) }
     var overflowExpanded by remember { mutableStateOf(false) }
     val tabs = listOf("Overview", "Request", "Response")
     val context = LocalContext.current
 
+    // ── Snackbar ──────────────────────────────────────────────────────────────
+    val snackbarHostState = remember { SnackbarHostState() }
+    val snackbarScope = rememberCoroutineScope()
+
+    val onCopied: (String) -> Unit = { label ->
+        snackbarScope.launch {
+            snackbarHostState.currentSnackbarData?.dismiss()
+            snackbarHostState.showSnackbar(
+                message = "$label copied",
+                duration = SnackbarDuration.Short,
+            )
+        }
+    }
+
     transaction?.let { tx ->
         Scaffold(
+            snackbarHost = {
+                SnackbarHost(hostState = snackbarHostState) { data ->
+                    Snackbar(
+                        snackbarData = data,
+                        containerColor = Color(0xFF1A2235),
+                        contentColor = Color.White,
+                        actionColor = NetScopeAccent,
+                        shape = RoundedCornerShape(10.dp),
+                    )
+                }
+            },
             topBar = {
                 TopAppBar(
                     title = {
@@ -100,20 +139,21 @@ fun TransactionDetailScreen(
                     navigationIcon = {
                         IconButton(onClick = onBack) {
                             Icon(
-                                imageVector = Icons.Default.ArrowBack,
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                                 contentDescription = "Back",
                                 tint = Color.White,
                             )
                         }
                     },
                     actions = {
-                        // Primary copy action — one tap copies as cURL
+                        // Primary one-tap action: copy as cURL
                         IconButton(onClick = {
                             NetScopeExporter.copyToClipboard(
                                 context = context,
                                 text = NetScopeExporter.toCurl(tx),
                                 label = "cURL command",
                             )
+                            onCopied("cURL command")
                         }) {
                             Icon(
                                 imageVector = Icons.Default.ContentCopy,
@@ -134,11 +174,12 @@ fun TransactionDetailScreen(
                             DropdownMenu(
                                 expanded = overflowExpanded,
                                 onDismissRequest = { overflowExpanded = false },
+                                containerColor = Color(0xFF1A2235),
                             ) {
                                 DropdownMenuItem(
-                                    text = { Text("Copy full summary") },
+                                    text = { Text("Copy full summary", color = Color.White, fontSize = 13.sp) },
                                     leadingIcon = {
-                                        Icon(Icons.Default.ContentCopy, contentDescription = null)
+                                        Icon(Icons.Default.ContentCopy, contentDescription = null, tint = NetScopeMuted, modifier = Modifier.size(16.dp))
                                     },
                                     onClick = {
                                         overflowExpanded = false
@@ -147,12 +188,13 @@ fun TransactionDetailScreen(
                                             text = NetScopeExporter.toFullSummary(tx),
                                             label = "Transaction summary",
                                         )
+                                        onCopied("Full summary")
                                     },
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("Share as cURL") },
+                                    text = { Text("Share as cURL", color = Color.White, fontSize = 13.sp) },
                                     leadingIcon = {
-                                        Icon(Icons.Default.Share, contentDescription = null)
+                                        Icon(Icons.Default.Share, contentDescription = null, tint = NetScopeMuted, modifier = Modifier.size(16.dp))
                                     },
                                     onClick = {
                                         overflowExpanded = false
@@ -164,9 +206,9 @@ fun TransactionDetailScreen(
                                     },
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("Share full summary") },
+                                    text = { Text("Share full summary", color = Color.White, fontSize = 13.sp) },
                                     leadingIcon = {
-                                        Icon(Icons.Default.Share, contentDescription = null)
+                                        Icon(Icons.Default.Share, contentDescription = null, tint = NetScopeMuted, modifier = Modifier.size(16.dp))
                                     },
                                     onClick = {
                                         overflowExpanded = false
@@ -190,7 +232,7 @@ fun TransactionDetailScreen(
                     .fillMaxSize()
                     .padding(innerPadding),
             ) {
-                // URL header strip with endpoint copy button
+                // ── URL strip with endpoint copy ──────────────────────────────
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -214,6 +256,7 @@ fun TransactionDetailScreen(
                                 text = "${tx.method} ${tx.url}",
                                 label = "Endpoint",
                             )
+                            onCopied("Endpoint")
                         },
                         modifier = Modifier.size(36.dp),
                     ) {
@@ -226,29 +269,33 @@ fun TransactionDetailScreen(
                     }
                 }
 
-                // Tabs
+                // ── Tab bar ───────────────────────────────────────────────────
                 ScrollableTabRow(
                     selectedTabIndex = selectedTab,
                     containerColor = NetScopeSurface,
                     contentColor = NetScopeAccent,
                     edgePadding = 0.dp,
                     indicator = { tabPositions ->
-                        TabRowDefaults.Indicator(
+                        TabRowDefaults.SecondaryIndicator(
                             modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
                             color = NetScopeAccent,
                             height = 2.dp,
                         )
                     },
-                    divider = { Divider(color = Color(0xFF1E2D45)) },
+                    divider = { HorizontalDivider(color = Color(0xFF1E2D45)) },
                 ) {
                     tabs.forEachIndexed { index, title ->
                         Tab(
                             selected = selectedTab == index,
-                            onClick = { selectedTab = index },
+                            onClick = {
+                                previousTab = selectedTab
+                                selectedTab = index
+                            },
                             text = {
                                 Text(
                                     text = title,
                                     fontSize = 13.sp,
+                                    fontWeight = if (selectedTab == index) FontWeight.SemiBold else FontWeight.Normal,
                                     color = if (selectedTab == index) NetScopeAccent else NetScopeMuted,
                                 )
                             },
@@ -256,11 +303,22 @@ fun TransactionDetailScreen(
                     }
                 }
 
-                // Tab content
-                when (selectedTab) {
-                    0 -> OverviewTab(tx)
-                    1 -> RequestTab(tx, context)
-                    2 -> ResponseTab(tx, context)
+                // ── Tab content with directional slide ────────────────────────
+                AnimatedContent(
+                    targetState = selectedTab,
+                    transitionSpec = {
+                        val direction = if (targetState > initialState) 1 else -1
+                        (slideInHorizontally(tween(250)) { w -> direction * w } + fadeIn(tween(200))) togetherWith
+                            (slideOutHorizontally(tween(200)) { w -> -direction * w } + fadeOut(tween(150)))
+                    },
+                    label = "tabContent",
+                ) { tab ->
+                    when (tab) {
+                        0    -> OverviewTab(tx)
+                        1    -> RequestTab(tx, context, onCopied)
+                        2    -> ResponseTab(tx, context, onCopied)
+                        else -> Unit
+                    }
                 }
             }
         }
@@ -300,11 +358,13 @@ private fun OverviewTab(tx: NetTransaction) {
             InfoRow("Body size", tx.requestBodySize.formatBytes())
             tx.requestContentType?.let { InfoRow("Content-Type", it) }
         }
+
         SectionCard(title = "Response") {
             tx.responseCode?.let { InfoRow("Status", "$it ${tx.responseMessage ?: ""}") }
             InfoRow("Body size", tx.responseBodySize.formatBytes())
             tx.responseContentType?.let { InfoRow("Content-Type", it) }
         }
+
         tx.error?.let {
             SectionCard(title = "Error") {
                 Text(
@@ -345,6 +405,7 @@ private fun TimingTimeline(tx: NetTransaction) {
 
     val total = remember(segments) { segments.sumOf { it.durationMs }.coerceAtLeast(1L) }
 
+    // Proportional bar
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -363,6 +424,7 @@ private fun TimingTimeline(tx: NetTransaction) {
 
     Spacer(Modifier.height(10.dp))
 
+    // Legend
     segments.forEach { seg ->
         Row(
             modifier = Modifier
@@ -396,7 +458,11 @@ private fun TimingTimeline(tx: NetTransaction) {
 // ── Tab: Request ──────────────────────────────────────────────────────────────
 
 @Composable
-private fun RequestTab(tx: NetTransaction, context: android.content.Context) {
+private fun RequestTab(
+    tx: NetTransaction,
+    context: android.content.Context,
+    onCopied: (String) -> Unit,
+) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -413,6 +479,7 @@ private fun RequestTab(tx: NetTransaction, context: android.content.Context) {
                         text = NetScopeExporter.headersText(tx.requestHeaders),
                         label = "Request headers",
                     )
+                    onCopied("Request headers")
                 },
             ) {
                 HeaderTable(tx.requestHeaders)
@@ -427,10 +494,14 @@ private fun RequestTab(tx: NetTransaction, context: android.content.Context) {
                         text = body,
                         label = "Request body",
                     )
+                    onCopied("Request body")
                 },
             ) {
                 BodyView(body)
             }
+        }
+        if (tx.requestHeaders.isEmpty() && tx.requestBody == null) {
+            EmptyTabState("No request data captured")
         }
     }
 }
@@ -438,7 +509,11 @@ private fun RequestTab(tx: NetTransaction, context: android.content.Context) {
 // ── Tab: Response ─────────────────────────────────────────────────────────────
 
 @Composable
-private fun ResponseTab(tx: NetTransaction, context: android.content.Context) {
+private fun ResponseTab(
+    tx: NetTransaction,
+    context: android.content.Context,
+    onCopied: (String) -> Unit,
+) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -455,6 +530,7 @@ private fun ResponseTab(tx: NetTransaction, context: android.content.Context) {
                         text = NetScopeExporter.headersText(tx.responseHeaders),
                         label = "Response headers",
                     )
+                    onCopied("Response headers")
                 },
             ) {
                 HeaderTable(tx.responseHeaders)
@@ -469,10 +545,17 @@ private fun ResponseTab(tx: NetTransaction, context: android.content.Context) {
                         text = body,
                         label = "Response body",
                     )
+                    onCopied("Response body")
                 },
             ) {
                 BodyView(body)
             }
+        }
+        if (tx.responseHeaders.isEmpty() && tx.responseBody == null) {
+            EmptyTabState(
+                if (tx.statusClass == NetTransaction.StatusClass.PENDING) "Waiting for response…"
+                else "No response data captured"
+            )
         }
     }
 }
@@ -483,8 +566,7 @@ private fun ResponseTab(tx: NetTransaction, context: android.content.Context) {
  * Card with a labelled header and optional inline copy button.
  *
  * @param onCopy When non-null, a small copy icon is shown in the header row.
- *               The lambda receives the copy action so callers control what text
- *               gets placed on the clipboard.
+ *               Callers control what text gets placed on the clipboard.
  */
 @Composable
 private fun SectionCard(
@@ -499,7 +581,7 @@ private fun SectionCard(
             .background(Color(0xFF1A2235))
             .padding(horizontal = 16.dp, vertical = 12.dp),
     ) {
-        // Title row — copy button appears only when onCopy is provided
+        // Title row with optional copy button
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -597,6 +679,22 @@ private fun BodyView(body: String) {
             fontSize = 11.sp,
             fontFamily = FontFamily.Monospace,
             lineHeight = 18.sp,
+        )
+    }
+}
+
+@Composable
+private fun EmptyTabState(message: String) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 40.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = message,
+            color = NetScopeMuted,
+            fontSize = 13.sp,
         )
     }
 }
