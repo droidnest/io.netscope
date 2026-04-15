@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.FilterListOff
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -95,6 +96,7 @@ private val METHOD_CHIPS = listOf("GET", "POST", "PUT", "PATCH", "DELETE")
 fun TransactionListScreen(
     viewModel: NetScopeViewModel,
     onTransactionClick: (Long) -> Unit,
+    onSettingsClick: () -> Unit,
 ) {
     val transactions by viewModel.transactions.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
@@ -126,6 +128,14 @@ fun TransactionListScreen(
                     }
                 },
                 actions = {
+                    // Settings
+                    IconButton(onClick = onSettingsClick) {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = "Settings",
+                            tint = NetScopeMuted,
+                        )
+                    }
                     // Clear filters — only when active
                     AnimatedVisibility(
                         visible = filterState.isActive || searchQuery.isNotBlank(),
@@ -228,7 +238,7 @@ fun TransactionListScreen(
                 EmptyState(isSearching = searchQuery.isNotBlank() || filterState.isActive)
             } else {
                 LazyColumn(
-                    contentPadding = PaddingValues(horizontal = 16.dp, top = 10.dp, bottom = 24.dp),
+                    contentPadding = PaddingValues(start = 16.dp, top = 10.dp, bottom = 24.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     items(transactions, key = { it.id }) { transaction ->

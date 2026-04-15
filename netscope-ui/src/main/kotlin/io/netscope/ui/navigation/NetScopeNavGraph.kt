@@ -7,12 +7,14 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import io.netscope.ui.screen.SettingsScreen
 import io.netscope.ui.screen.TransactionDetailScreen
 import io.netscope.ui.screen.TransactionListScreen
 import io.netscope.ui.viewmodel.NetScopeViewModel
 
-private const val ROUTE_LIST = "list"
-private const val ROUTE_DETAIL = "detail/{transactionId}"
+private const val ROUTE_LIST     = "list"
+private const val ROUTE_DETAIL   = "detail/{transactionId}"
+private const val ROUTE_SETTINGS = "settings"
 
 @Composable
 fun NetScopeNavGraph(navController: NavHostController) {
@@ -26,6 +28,7 @@ fun NetScopeNavGraph(navController: NavHostController) {
                     viewModel.selectTransaction(id)
                     navController.navigate("detail/$id")
                 },
+                onSettingsClick = { navController.navigate(ROUTE_SETTINGS) },
             )
         }
 
@@ -39,6 +42,13 @@ fun NetScopeNavGraph(navController: NavHostController) {
                     viewModel.clearSelection()
                     navController.popBackStack()
                 },
+            )
+        }
+
+        composable(ROUTE_SETTINGS) {
+            SettingsScreen(
+                onBack = { navController.popBackStack() },
+                onClearAll = { viewModel.clearAllTransactions() },
             )
         }
     }
