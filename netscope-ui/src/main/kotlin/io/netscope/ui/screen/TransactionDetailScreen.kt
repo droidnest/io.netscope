@@ -20,8 +20,11 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Divider
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -37,6 +40,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -76,6 +80,7 @@ fun TransactionDetailScreen(
 ) {
     val transaction by viewModel.selectedTransaction.collectAsState()
     var selectedTab by remember { mutableIntStateOf(0) }
+    var overflowExpanded by remember { mutableStateOf(false) }
     val tabs = listOf("Overview", "Request", "Response")
     val context = LocalContext.current
 
@@ -102,7 +107,7 @@ fun TransactionDetailScreen(
                         }
                     },
                     actions = {
-                        // Copy as cURL
+                        // Primary copy action — one tap copies as cURL
                         IconButton(onClick = {
                             NetScopeExporter.copyToClipboard(
                                 context = context,
@@ -116,19 +121,63 @@ fun TransactionDetailScreen(
                                 tint = NetScopeMuted,
                             )
                         }
-                        // Share as cURL
-                        IconButton(onClick = {
-                            NetScopeExporter.share(
-                                context = context,
-                                text = NetScopeExporter.toCurl(tx),
-                                chooserTitle = "Share request as cURL",
-                            )
-                        }) {
-                            Icon(
-                                imageVector = Icons.Default.Share,
-                                contentDescription = "Share as cURL",
-                                tint = NetScopeMuted,
-                            )
+
+                        // Overflow: full summary copy/share + share as cURL
+                        Box {
+                            IconButton(onClick = { overflowExpanded = true }) {
+                                Icon(
+                                    imageVector = Icons.Default.MoreVert,
+                                    contentDescription = "More options",
+                                    tint = NetScopeMuted,
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = overflowExpanded,
+                                onDismissRequest = { overflowExpanded = false },
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("Copy full summary") },
+                                    leadingIcon = {
+                                        Icon(Icons.Default.ContentCopy, contentDescription = null)
+                                    },
+                                    onClick = {
+                                        overflowExpanded = false
+                                        NetScopeExporter.copyToClipboard(
+                                            context = context,
+                                            text = NetScopeExporter.toFullSummary(tx),
+                                            label = "Transaction summary",
+                                        )
+                                    },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Share as cURL") },
+                                    leadingIcon = {
+                                        Icon(Icons.Default.Share, contentDescription = null)
+                                    },
+                                    onClick = {
+                                        overflowExpanded = false
+                                        NetScopeExporter.share(
+                                            context = context,
+                                            text = NetScopeExporter.toCurl(tx),
+                                            chooserTitle = "Share request as cURL",
+                                        )
+                                    },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Share full summary") },
+                                    leadingIcon = {
+                                        Icon(Icons.Default.Share, contentDescription = null)
+                                    },
+                                    onClick = {
+                                        overflowExpanded = false
+                                        NetScopeExporter.share(
+                                            context = context,
+                                            text = NetScopeExporter.toFullSummary(tx),
+                                            chooserTitle = "Share transaction",
+                                        )
+                                    },
+                                )
+                            }
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = NetScopeSurface),
@@ -141,20 +190,40 @@ fun TransactionDetailScreen(
                     .fillMaxSize()
                     .padding(innerPadding),
             ) {
-                // URL header
-                Column(
+                // URL header strip with endpoint copy button
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .background(NetScopeSurface)
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                        .padding(start = 16.dp, end = 4.dp, top = 10.dp, bottom = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(text = tx.host, color = NetScopeMuted, fontSize = 11.sp)
-                    Text(
-                        text = tx.path + (tx.query?.let { "?$it" } ?: ""),
-                        color = Color.White,
-                        fontSize = 13.sp,
-                        fontFamily = FontFamily.Monospace,
-                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(text = tx.host, color = NetScopeMuted, fontSize = 11.sp)
+                        Text(
+                            text = tx.path + (tx.query?.let { "?$it" } ?: ""),
+                            color = Color.White,
+                            fontSize = 13.sp,
+                            fontFamily = FontFamily.Monospace,
+                        )
+                    }
+                    IconButton(
+                        onClick = {
+                            NetScopeExporter.copyToClipboard(
+                                context = context,
+                                text = "${tx.method} ${tx.url}",
+                                label = "Endpoint",
+                            )
+                        },
+                        modifier = Modifier.size(36.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ContentCopy,
+                            contentDescription = "Copy endpoint",
+                            tint = NetScopeMuted,
+                            modifier = Modifier.size(16.dp),
+                        )
+                    }
                 }
 
                 // Tabs
@@ -190,8 +259,8 @@ fun TransactionDetailScreen(
                 // Tab content
                 when (selectedTab) {
                     0 -> OverviewTab(tx)
-                    1 -> RequestTab(tx)
-                    2 -> ResponseTab(tx)
+                    1 -> RequestTab(tx, context)
+                    2 -> ResponseTab(tx, context)
                 }
             }
         }
@@ -216,7 +285,7 @@ private fun OverviewTab(tx: NetTransaction) {
             tx.durationMs?.let { InfoRow("Duration", "${it}ms") }
         }
 
-        // ── Network phase timeline (only when EventListener data is present) ──
+        // Network phase timeline (only when EventListener data is present)
         val hasPhaseData = tx.dnsMs != null || tx.connectMs != null ||
                 tx.sslMs != null || tx.ttfbMs != null
         if (hasPhaseData) {
@@ -238,7 +307,12 @@ private fun OverviewTab(tx: NetTransaction) {
         }
         tx.error?.let {
             SectionCard(title = "Error") {
-                Text(text = it, color = Color(0xFFFF4D6A), fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+                Text(
+                    text = it,
+                    color = Color(0xFFFF4D6A),
+                    fontSize = 12.sp,
+                    fontFamily = FontFamily.Monospace,
+                )
             }
         }
     }
@@ -271,7 +345,6 @@ private fun TimingTimeline(tx: NetTransaction) {
 
     val total = remember(segments) { segments.sumOf { it.durationMs }.coerceAtLeast(1L) }
 
-    // Segmented bar
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -279,10 +352,9 @@ private fun TimingTimeline(tx: NetTransaction) {
             .clip(RoundedCornerShape(5.dp)),
     ) {
         segments.forEach { seg ->
-            val fraction = seg.durationMs.toFloat() / total
             Box(
                 modifier = Modifier
-                    .weight(fraction)
+                    .weight(seg.durationMs.toFloat() / total)
                     .fillMaxSize()
                     .background(seg.color),
             )
@@ -291,7 +363,6 @@ private fun TimingTimeline(tx: NetTransaction) {
 
     Spacer(Modifier.height(10.dp))
 
-    // Legend rows
     segments.forEach { seg ->
         Row(
             modifier = Modifier
@@ -306,8 +377,18 @@ private fun TimingTimeline(tx: NetTransaction) {
                     .background(seg.color),
             )
             Spacer(Modifier.width(8.dp))
-            Text(text = seg.label, color = NetScopeMuted, fontSize = 11.sp, modifier = Modifier.weight(1f))
-            Text(text = "${seg.durationMs}ms", color = Color.White, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+            Text(
+                text = seg.label,
+                color = NetScopeMuted,
+                fontSize = 11.sp,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                text = "${seg.durationMs}ms",
+                color = Color.White,
+                fontSize = 11.sp,
+                fontFamily = FontFamily.Monospace,
+            )
         }
     }
 }
@@ -315,7 +396,7 @@ private fun TimingTimeline(tx: NetTransaction) {
 // ── Tab: Request ──────────────────────────────────────────────────────────────
 
 @Composable
-private fun RequestTab(tx: NetTransaction) {
+private fun RequestTab(tx: NetTransaction, context: android.content.Context) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -324,12 +405,30 @@ private fun RequestTab(tx: NetTransaction) {
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         if (tx.requestHeaders.isNotEmpty()) {
-            SectionCard(title = "Headers (${tx.requestHeaders.size})") {
+            SectionCard(
+                title = "Headers (${tx.requestHeaders.size})",
+                onCopy = {
+                    NetScopeExporter.copyToClipboard(
+                        context = context,
+                        text = NetScopeExporter.headersText(tx.requestHeaders),
+                        label = "Request headers",
+                    )
+                },
+            ) {
                 HeaderTable(tx.requestHeaders)
             }
         }
         tx.requestBody?.let { body ->
-            SectionCard(title = "Body") {
+            SectionCard(
+                title = "Body",
+                onCopy = {
+                    NetScopeExporter.copyToClipboard(
+                        context = context,
+                        text = body,
+                        label = "Request body",
+                    )
+                },
+            ) {
                 BodyView(body)
             }
         }
@@ -339,7 +438,7 @@ private fun RequestTab(tx: NetTransaction) {
 // ── Tab: Response ─────────────────────────────────────────────────────────────
 
 @Composable
-private fun ResponseTab(tx: NetTransaction) {
+private fun ResponseTab(tx: NetTransaction, context: android.content.Context) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -348,12 +447,30 @@ private fun ResponseTab(tx: NetTransaction) {
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         if (tx.responseHeaders.isNotEmpty()) {
-            SectionCard(title = "Headers (${tx.responseHeaders.size})") {
+            SectionCard(
+                title = "Headers (${tx.responseHeaders.size})",
+                onCopy = {
+                    NetScopeExporter.copyToClipboard(
+                        context = context,
+                        text = NetScopeExporter.headersText(tx.responseHeaders),
+                        label = "Response headers",
+                    )
+                },
+            ) {
                 HeaderTable(tx.responseHeaders)
             }
         }
         tx.responseBody?.let { body ->
-            SectionCard(title = "Body") {
+            SectionCard(
+                title = "Body",
+                onCopy = {
+                    NetScopeExporter.copyToClipboard(
+                        context = context,
+                        text = body,
+                        label = "Response body",
+                    )
+                },
+            ) {
                 BodyView(body)
             }
         }
@@ -362,23 +479,55 @@ private fun ResponseTab(tx: NetTransaction) {
 
 // ── Shared sub-components ─────────────────────────────────────────────────────
 
+/**
+ * Card with a labelled header and optional inline copy button.
+ *
+ * @param onCopy When non-null, a small copy icon is shown in the header row.
+ *               The lambda receives the copy action so callers control what text
+ *               gets placed on the clipboard.
+ */
 @Composable
-private fun SectionCard(title: String, content: @Composable () -> Unit) {
+private fun SectionCard(
+    title: String,
+    onCopy: (() -> Unit)? = null,
+    content: @Composable () -> Unit,
+) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
             .background(Color(0xFF1A2235))
-            .padding(16.dp),
+            .padding(horizontal = 16.dp, vertical = 12.dp),
     ) {
-        Text(
-            text = title,
-            color = NetScopeAccent,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.SemiBold,
-            letterSpacing = 0.8.sp,
-            modifier = Modifier.padding(bottom = 12.dp),
-        )
+        // Title row — copy button appears only when onCopy is provided
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 10.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = title,
+                color = NetScopeAccent,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                letterSpacing = 0.8.sp,
+            )
+            if (onCopy != null) {
+                IconButton(
+                    onClick = onCopy,
+                    modifier = Modifier.size(20.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ContentCopy,
+                        contentDescription = "Copy $title",
+                        tint = NetScopeMuted,
+                        modifier = Modifier.size(14.dp),
+                    )
+                }
+            }
+        }
         content()
     }
 }
@@ -391,7 +540,12 @@ private fun InfoRow(label: String, value: String) {
             .padding(vertical = 4.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Text(text = label, color = NetScopeMuted, fontSize = 12.sp, modifier = Modifier.weight(0.35f))
+        Text(
+            text = label,
+            color = NetScopeMuted,
+            fontSize = 12.sp,
+            modifier = Modifier.weight(0.35f),
+        )
         Text(
             text = value,
             color = Color.White,
@@ -449,95 +603,60 @@ private fun BodyView(body: String) {
 
 // ── JSON syntax highlighting ──────────────────────────────────────────────────
 
-private val JsonKeyColor     = Color(0xFF7DD3FC) // sky-300 — keys
-private val JsonStringColor  = Color(0xFF86EFAC) // green-300 — string values
-private val JsonNumberColor  = Color(0xFFFBBF24) // amber-400 — numbers
-private val JsonKeywordColor = Color(0xFFA78BFA) // violet-400 — true / false / null
-private val JsonPunctColor   = Color(0xFF6B7FA3) // muted — { } [ ] : ,
-private val JsonDefaultColor = Color(0xFFCDD6F4) // plain text / fallback
+private val JsonKeyColor     = Color(0xFF7DD3FC)
+private val JsonStringColor  = Color(0xFF86EFAC)
+private val JsonNumberColor  = Color(0xFFFBBF24)
+private val JsonKeywordColor = Color(0xFFA78BFA)
+private val JsonPunctColor   = Color(0xFF6B7FA3)
+private val JsonDefaultColor = Color(0xFFCDD6F4)
 
-/**
- * Returns an [AnnotatedString] with JSON syntax colouring, or a plain-coloured
- * [AnnotatedString] for non-JSON bodies.
- */
 private fun String.highlightedBody(): AnnotatedString {
     val trimmed = trim()
     val isJson = trimmed.startsWith("{") || trimmed.startsWith("[")
     val pretty = if (isJson) trimmed.prettyPrintJson() else trimmed
-
     return if (!isJson) {
-        buildAnnotatedString {
-            withStyle(SpanStyle(color = JsonDefaultColor)) { append(pretty) }
-        }
+        buildAnnotatedString { withStyle(SpanStyle(color = JsonDefaultColor)) { append(pretty) } }
     } else {
         buildAnnotatedString { appendJsonHighlighted(pretty) }
     }
 }
 
-/**
- * Appends [json] to the receiver [AnnotatedString.Builder] character-by-character,
- * applying colour spans per JSON token type.
- *
- * State machine tracks whether we're inside a string, and whether that string is
- * a key (followed by `:`) or a value.
- */
 private fun AnnotatedString.Builder.appendJsonHighlighted(json: String) {
     var i = 0
 
     fun peekIsColon(): Boolean {
         var j = i
-        while (j < json.length && (json[j] == ' ' || json[j] == '\n' || json[j] == '\r' || json[j] == '\t')) j++
+        while (j < json.length && json[j] in " \n\r\t") j++
         return j < json.length && json[j] == ':'
     }
 
     while (i < json.length) {
         val ch = json[i]
         when {
-            // ── String token ──────────────────────────────────────────────
             ch == '"' -> {
                 val start = i
-                i++ // consume opening quote
+                i++
                 while (i < json.length) {
                     when {
-                        json[i] == '\\' -> i += 2            // skip escaped char
-                        json[i] == '"'  -> { i++; break }    // closing quote
+                        json[i] == '\\' -> i += 2
+                        json[i] == '"'  -> { i++; break }
                         else            -> i++
                     }
                 }
-                val raw = json.substring(start, i)
-                // A string is a key if what follows (ignoring whitespace) is ':'
                 val color = if (peekIsColon()) JsonKeyColor else JsonStringColor
-                withStyle(SpanStyle(color = color)) { append(raw) }
+                withStyle(SpanStyle(color = color)) { append(json.substring(start, i)) }
             }
-
-            // ── Number ────────────────────────────────────────────────────
             ch == '-' || ch.isDigit() -> {
                 val start = i
                 if (ch == '-') i++
                 while (i < json.length && (json[i].isDigit() || json[i] == '.' || json[i] in "eE+-")) i++
                 withStyle(SpanStyle(color = JsonNumberColor)) { append(json.substring(start, i)) }
             }
-
-            // ── Keywords ──────────────────────────────────────────────────
-            json.startsWith("true", i) -> {
-                withStyle(SpanStyle(color = JsonKeywordColor)) { append("true") }; i += 4
-            }
-            json.startsWith("false", i) -> {
-                withStyle(SpanStyle(color = JsonKeywordColor)) { append("false") }; i += 5
-            }
-            json.startsWith("null", i) -> {
-                withStyle(SpanStyle(color = JsonKeywordColor)) { append("null") }; i += 4
-            }
-
-            // ── Punctuation ───────────────────────────────────────────────
-            ch in "{}[],:." -> {
-                withStyle(SpanStyle(color = JsonPunctColor)) { append(ch) }; i++
-            }
-
-            // ── Whitespace / everything else ──────────────────────────────
-            else -> {
-                withStyle(SpanStyle(color = JsonDefaultColor)) { append(ch) }; i++
-            }
+            json.startsWith("true",  i) -> { withStyle(SpanStyle(color = JsonKeywordColor)) { append("true")  }; i += 4 }
+            json.startsWith("false", i) -> { withStyle(SpanStyle(color = JsonKeywordColor)) { append("false") }; i += 5 }
+            json.startsWith("null",  i) -> { withStyle(SpanStyle(color = JsonKeywordColor)) { append("null")  }; i += 4 }
+            ch in "{}[],:." -> { withStyle(SpanStyle(color = JsonPunctColor)) { append(ch) }; i++ }
+            else -> { withStyle(SpanStyle(color = JsonDefaultColor)) { append(ch) }; i++ }
         }
     }
 }
@@ -550,21 +669,15 @@ private fun String.prettyPrintJson(): String = try {
     while (i < length) {
         val ch = this[i]
         when {
-            ch == '"' && !inString -> { inString = true; sb.append(ch) }
+            ch == '"' && !inString -> { inString = true;  sb.append(ch) }
             ch == '"' && inString  -> { inString = false; sb.append(ch) }
             ch == '\\' && inString -> { sb.append(ch); sb.append(this[++i]) }
             inString               -> sb.append(ch)
-            ch == '{' || ch == '[' -> {
-                sb.append(ch); sb.append('\n')
-                indent++; sb.append("  ".repeat(indent))
-            }
-            ch == '}' || ch == ']' -> {
-                sb.append('\n'); indent--
-                sb.append("  ".repeat(indent)); sb.append(ch)
-            }
+            ch == '{' || ch == '[' -> { sb.append(ch); sb.append('\n'); indent++; sb.append("  ".repeat(indent)) }
+            ch == '}' || ch == ']' -> { sb.append('\n'); indent--; sb.append("  ".repeat(indent)); sb.append(ch) }
             ch == ','              -> { sb.append(ch); sb.append('\n'); sb.append("  ".repeat(indent)) }
             ch == ':'              -> sb.append(": ")
-            ch == ' ' || ch == '\n' || ch == '\r' || ch == '\t' -> { /* skip stale whitespace */ }
+            ch in " \n\r\t"       -> { /* skip pre-existing whitespace */ }
             else                   -> sb.append(ch)
         }
         i++

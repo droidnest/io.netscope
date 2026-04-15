@@ -18,6 +18,8 @@ import java.util.TimeZone
  * Provides:
  * - [toCurl]           — generate a cURL command string for a single transaction
  * - [toHar]            — generate an HTTP Archive (HAR 1.2) JSON for a list of transactions
+ * - [headersText]      — format a header list as `Name: Value` lines
+ * - [toFullSummary]    — human-readable full transaction dump (good for bug reports)
  * - [copyToClipboard]  — copy text to the system clipboard
  * - [share]            — share text via the Android share sheet
  */
@@ -123,6 +125,79 @@ object NetScopeExporter {
         )
 
         return gson.toJson(har)
+    }
+
+    // ── Plain-text formatters ─────────────────────────────────────────────────
+
+    /**
+     * Formats [headers] as `Name: Value` lines, one per line.
+     * Redacted headers keep their `██████` placeholder.
+     */
+    fun headersText(headers: List<NetHeader>): String =
+        headers.joinToString("\n") { "${it.name}: ${it.value}" }
+
+    /**
+     * Returns a human-readable full transaction dump suitable for pasting
+     * into a bug report, Slack message, or JIRA ticket.
+     *
+     * Sections present only when data is available:
+     * endpoint, timing, request headers, request body,
+     * response status + headers, response body, error.
+     */
+    fun toFullSummary(tx: NetTransaction): String = buildString {
+        val dateFmt = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.US)
+
+        appendLine("═══════════════════════════════════════")
+        appendLine("  ${tx.method}  ${tx.url}")
+        tx.responseCode?.let { code ->
+            append("  $code ${tx.responseMessage ?: ""}")
+            tx.durationMs?.let { append("  ·  ${it}ms") }
+            appendLine()
+        }
+        appendLine("  ${dateFmt.format(Date(tx.requestDate))}")
+        appendLine("═══════════════════════════════════════")
+
+        if (tx.requestHeaders.isNotEmpty()) {
+            appendLine()
+            appendLine("── REQUEST HEADERS (${tx.requestHeaders.size})")
+            appendLine(headersText(tx.requestHeaders))
+        }
+
+        tx.requestBody?.let { body ->
+            appendLine()
+            appendLine("── REQUEST BODY")
+            appendLine(body)
+        }
+
+        if (tx.responseHeaders.isNotEmpty()) {
+            appendLine()
+            appendLine("── RESPONSE HEADERS (${tx.responseHeaders.size})")
+            appendLine(headersText(tx.responseHeaders))
+        }
+
+        tx.responseBody?.let { body ->
+            appendLine()
+            appendLine("── RESPONSE BODY")
+            appendLine(body)
+        }
+
+        tx.error?.let { err ->
+            appendLine()
+            appendLine("── ERROR")
+            appendLine(err)
+        }
+
+        // Timing phases (only when EventListener data is present)
+        val hasPhases = tx.dnsMs != null || tx.connectMs != null ||
+                tx.sslMs != null || tx.ttfbMs != null
+        if (hasPhases) {
+            appendLine()
+            appendLine("── NETWORK PHASES")
+            tx.dnsMs?.let     { appendLine("  DNS:     ${it}ms") }
+            tx.connectMs?.let { appendLine("  Connect: ${it}ms") }
+            tx.sslMs?.let     { appendLine("  TLS:     ${it}ms") }
+            tx.ttfbMs?.let    { appendLine("  TTFB:    ${it}ms") }
+        }
     }
 
     // ── Android helpers ───────────────────────────────────────────────────────
