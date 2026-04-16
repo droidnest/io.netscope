@@ -72,7 +72,9 @@ import io.netscope.ui.component.NetScopeAccent
 import io.netscope.ui.component.NetScopeBorder
 import io.netscope.ui.component.NetScopeCard
 import io.netscope.ui.component.NetScopeDarkBackground
+import io.netscope.ui.component.NetScopeDropdown
 import io.netscope.ui.component.NetScopeMuted
+import io.netscope.ui.component.NetScopeOnSurface
 import io.netscope.ui.component.NetScopeSurface
 import io.netscope.ui.component.StatDot
 import io.netscope.ui.component.TransactionItem
@@ -122,7 +124,7 @@ fun TransactionListScreen(
                             text = "NetScope",
                             fontWeight = FontWeight.Bold,
                             fontSize = 18.sp,
-                            color = Color.White,
+                            color = NetScopeOnSurface,
                             letterSpacing = (-0.3).sp,
                         )
                     }
@@ -163,7 +165,7 @@ fun TransactionListScreen(
                         DropdownMenu(
                             expanded = sortMenuExpanded,
                             onDismissRequest = { sortMenuExpanded = false },
-                            containerColor = Color(0xFF1A2235),
+                            containerColor = NetScopeDropdown,
                         ) {
                             SortOrder.entries.forEach { order ->
                                 DropdownMenuItem(
@@ -171,7 +173,7 @@ fun TransactionListScreen(
                                         Text(
                                             text = order.label(),
                                             color = if (filterState.sortOrder == order) NetScopeAccent
-                                                    else Color.White,
+                                                    else NetScopeOnSurface,
                                             fontSize = 13.sp,
                                         )
                                     },
@@ -474,7 +476,7 @@ private fun EmptyState(isSearching: Boolean) {
 
         Text(
             text = if (isSearching) "No results found" else "No requests yet",
-            color = Color.White,
+            color = NetScopeOnSurface,
             fontSize = 17.sp,
             fontWeight = FontWeight.SemiBold,
         )

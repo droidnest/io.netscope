@@ -155,7 +155,7 @@ fun TransactionItem(
                 MethodChip(method = transaction.method)
                 Text(
                     text = transaction.path + (transaction.query?.let { "?$it" } ?: ""),
-                    color = Color(0xFFCDD6F4),
+                    color = NetScopeOnCode,
                     fontSize = 12.sp,
                     fontFamily = FontFamily.Monospace,
                     maxLines = 1,
@@ -188,7 +188,7 @@ fun TransactionItem(
                 if (transaction.durationMs != null) {
                     Text(
                         text = "${transaction.durationMs}ms",
-                        color = durationColor(transaction.durationMs),
+                        color = durationColor(transaction.durationMs?:0L),
                         fontSize = 11.sp,
                         fontFamily = FontFamily.Monospace,
                     )
@@ -215,7 +215,7 @@ fun TransactionItem(
                         modifier = Modifier.size(11.dp),
                     )
                     Text(
-                        text = transaction.error,
+                        text = transaction.error.orEmpty(),
                         color = ColorError,
                         fontSize = 10.sp,
                         maxLines = 1,
