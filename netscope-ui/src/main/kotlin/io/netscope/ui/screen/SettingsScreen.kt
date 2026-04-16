@@ -70,11 +70,15 @@ import androidx.compose.ui.unit.sp
 import io.netscope.ui.component.NetScopeAccent
 import io.netscope.ui.component.NetScopeBorder
 import io.netscope.ui.component.NetScopeCard
+import io.netscope.ui.component.NetScopeCardAlt
+import io.netscope.ui.component.NetScopeCode
 import io.netscope.ui.component.NetScopeDarkBackground
 import io.netscope.ui.component.NetScopeMuted
+import io.netscope.ui.component.NetScopeOnSurface
 import io.netscope.ui.component.NetScopeSurface
 import io.netscope.ui.preferences.NetScopePreferences
 import io.netscope.ui.preferences.NotificationStyle
+import io.netscope.ui.preferences.ThemeMode
 
 // ── Picker options ────────────────────────────────────────────────────────────
 
@@ -88,11 +92,11 @@ private val MAX_TX_OPTIONS = listOf(
 )
 
 private val BODY_SIZE_OPTIONS = listOf(
-    50_000L     to "50 KB",
-    100_000L    to "100 KB",
-    250_000L    to "250 KB",
-    500_000L    to "500 KB",
-    1_048_576L  to "1 MB",
+    50_000L    to "50 KB",
+    100_000L   to "100 KB",
+    250_000L   to "250 KB",
+    500_000L   to "500 KB",
+    1_048_576L to "1 MB",
 )
 
 // ── Screen ────────────────────────────────────────────────────────────────────
@@ -102,9 +106,11 @@ private val BODY_SIZE_OPTIONS = listOf(
 fun SettingsScreen(
     onBack: () -> Unit,
     onClearAll: () -> Unit,
+    currentTheme: ThemeMode,
+    onThemeChange: (ThemeMode) -> Unit,
 ) {
     val context = LocalContext.current
-    val prefs = remember { NetScopePreferences(context) }
+    val prefs   = remember { NetScopePreferences(context) }
 
     var maxTransactions    by rememberSaveable { mutableStateOf(prefs.maxTransactions) }
     var maxBodySize        by rememberSaveable { mutableStateOf(prefs.maxBodySizeBytes) }
@@ -127,7 +133,7 @@ fun SettingsScreen(
                         text = "Settings",
                         fontWeight = FontWeight.SemiBold,
                         fontSize = 17.sp,
-                        color = Color.White,
+                        color = NetScopeOnSurface,
                     )
                 },
                 navigationIcon = {
@@ -135,7 +141,7 @@ fun SettingsScreen(
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back",
-                            tint = Color.White,
+                            tint = NetScopeOnSurface,
                         )
                     }
                 },
@@ -153,16 +159,31 @@ fun SettingsScreen(
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
 
+            // ── Appearance ────────────────────────────────────────────────────
+            SettingsSection(title = "Appearance") {
+                SettingsRow(
+                    title    = "Theme",
+                    subtitle = "Choose how NetScope looks on your device.",
+                ) {
+                    ThemeModePicker(
+                        selected = currentTheme,
+                        onSelect = { mode ->
+                            prefs.themeMode = mode
+                            onThemeChange(mode)
+                        },
+                    )
+                }
+            }
+
             // ── Capture ───────────────────────────────────────────────────────
             SettingsSection(title = "Capture") {
 
-                // Max transaction count
                 SettingsRow(
-                    title = "Max transaction count",
+                    title    = "Max transaction count",
                     subtitle = "Oldest entries are pruned once this limit is reached.",
                 ) {
                     OptionChips(
-                        options = MAX_TX_OPTIONS,
+                        options  = MAX_TX_OPTIONS,
                         selected = maxTransactions,
                         onSelect = { v -> maxTransactions = v; prefs.maxTransactions = v },
                     )
@@ -170,13 +191,12 @@ fun SettingsScreen(
 
                 SettingsDivider()
 
-                // Body size limit
                 SettingsRow(
-                    title = "Body size limit",
+                    title    = "Body size limit",
                     subtitle = "Request and response bodies are truncated beyond this size.",
                 ) {
                     OptionChips(
-                        options = BODY_SIZE_OPTIONS,
+                        options  = BODY_SIZE_OPTIONS,
                         selected = maxBodySize,
                         onSelect = { v -> maxBodySize = v; prefs.maxBodySizeBytes = v },
                     )
@@ -184,13 +204,12 @@ fun SettingsScreen(
 
                 SettingsDivider()
 
-                // Always read response body
                 SettingsRow(
-                    title = "Always read response body",
+                    title    = "Always read response body",
                     subtitle = "Force-read bodies even for non-text content types.",
                     trailing = {
                         NetScopeSwitch(
-                            checked = alwaysReadBody,
+                            checked         = alwaysReadBody,
                             onCheckedChange = { v -> alwaysReadBody = v; prefs.alwaysReadResponseBody = v },
                         )
                     },
@@ -200,21 +219,21 @@ fun SettingsScreen(
             // ── Privacy ───────────────────────────────────────────────────────
             SettingsSection(title = "Privacy") {
                 SettingsRow(
-                    title = "Header redaction rules",
+                    title    = "Header redaction rules",
                     subtitle = "Matched header values are replaced with ██████ in the UI and all exports.",
                 ) {
                     RedactedHeadersEditor(
-                        headers = redactedHeaders,
-                        showAddField = showAddHeaderField,
-                        addInput = addHeaderInput,
+                        headers        = redactedHeaders,
+                        showAddField   = showAddHeaderField,
+                        addInput       = addHeaderInput,
                         focusRequester = focusRequester,
                         onAddInputChange = { addHeaderInput = it },
-                        onAddToggle = {
+                        onAddToggle    = {
                             showAddHeaderField = !showAddHeaderField
                             addHeaderInput = ""
                             if (!showAddHeaderField) focusManager.clearFocus()
                         },
-                        onConfirmAdd = {
+                        onConfirmAdd   = {
                             val trimmed = addHeaderInput.trim()
                             if (trimmed.isNotEmpty()) {
                                 val updated = redactedHeaders + trimmed.lowercase()
@@ -225,7 +244,7 @@ fun SettingsScreen(
                             showAddHeaderField = false
                             focusManager.clearFocus()
                         },
-                        onRemove = { header ->
+                        onRemove       = { header ->
                             val updated = redactedHeaders - header
                             redactedHeaders = updated
                             prefs.redactedHeaders = updated
@@ -237,13 +256,12 @@ fun SettingsScreen(
             // ── Interface ─────────────────────────────────────────────────────
             SettingsSection(title = "Interface") {
 
-                // Shake-to-open gesture
                 SettingsRow(
-                    title = "Shake-to-open gesture",
+                    title    = "Shake-to-open gesture",
                     subtitle = "Shake the device to launch the NetScope transaction list.",
                     trailing = {
                         NetScopeSwitch(
-                            checked = shakeToOpen,
+                            checked         = shakeToOpen,
                             onCheckedChange = { v -> shakeToOpen = v; prefs.shakeToOpen = v },
                         )
                     },
@@ -251,9 +269,8 @@ fun SettingsScreen(
 
                 SettingsDivider()
 
-                // Notification style
                 SettingsRow(
-                    title = "Notification style",
+                    title    = "Notification style",
                     subtitle = "Controls how much information appears in the status-bar notification.",
                 ) {
                     NotificationStylePicker(
@@ -275,16 +292,12 @@ fun SettingsScreen(
                     Column {
                         Text(
                             text = "NetScope",
-                            color = Color.White,
+                            color = NetScopeOnSurface,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.SemiBold,
                         )
                         Spacer(Modifier.height(2.dp))
-                        Text(
-                            text = "Network inspector for Android",
-                            color = NetScopeMuted,
-                            fontSize = 12.sp,
-                        )
+                        Text(text = "Network inspector for Android", color = NetScopeMuted, fontSize = 12.sp)
                     }
                     Box(
                         modifier = Modifier
@@ -309,8 +322,8 @@ fun SettingsScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(10.dp))
-                    .background(Color(0xFFFF4D6A).copy(alpha = 0.08f))
-                    .border(0.5.dp, Color(0xFFFF4D6A).copy(alpha = 0.25f), RoundedCornerShape(10.dp))
+                    .background(ColorError.copy(alpha = 0.08f))
+                    .border(0.5.dp, ColorError.copy(alpha = 0.25f), RoundedCornerShape(10.dp))
                     .clickable { showClearDialog = true }
                     .padding(horizontal = 16.dp, vertical = 14.dp),
             ) {
@@ -318,18 +331,8 @@ fun SettingsScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.DeleteSweep,
-                        contentDescription = null,
-                        tint = Color(0xFFFF4D6A),
-                        modifier = Modifier.size(18.dp),
-                    )
-                    Text(
-                        text = "Clear all transactions",
-                        color = Color(0xFFFF4D6A),
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium,
-                    )
+                    Icon(Icons.Default.DeleteSweep, contentDescription = null, tint = ColorError, modifier = Modifier.size(18.dp))
+                    Text(text = "Clear all transactions", color = ColorError, fontSize = 14.sp, fontWeight = FontWeight.Medium)
                 }
             }
 
@@ -337,24 +340,21 @@ fun SettingsScreen(
         }
     }
 
-    // ── Confirmation dialog ───────────────────────────────────────────────────
     if (showClearDialog) {
         AlertDialog(
             onDismissRequest = { showClearDialog = false },
-            containerColor = Color(0xFF1A2235),
-            title = {
-                Text("Clear all transactions?", color = Color.White, fontWeight = FontWeight.SemiBold)
-            },
-            text = {
+            containerColor   = NetScopeCard,
+            title  = { Text("Clear all transactions?", color = NetScopeOnSurface, fontWeight = FontWeight.SemiBold) },
+            text   = {
                 Text(
-                    text = "This will permanently delete all captured requests. This action cannot be undone.",
+                    "This will permanently delete all captured requests. This action cannot be undone.",
                     color = NetScopeMuted,
                     fontSize = 13.sp,
                 )
             },
             confirmButton = {
                 TextButton(onClick = { showClearDialog = false; onClearAll(); onBack() }) {
-                    Text("Clear all", color = Color(0xFFFF4D6A), fontWeight = FontWeight.SemiBold)
+                    Text("Clear all", color = ColorError, fontWeight = FontWeight.SemiBold)
                 }
             },
             dismissButton = {
@@ -384,9 +384,7 @@ private fun SettingsSection(title: String, content: @Composable () -> Unit) {
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(12.dp))
                 .background(NetScopeCard),
-        ) {
-            content()
-        }
+        ) { content() }
     }
 }
 
@@ -410,7 +408,7 @@ private fun SettingsRow(
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(text = title, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                Text(text = title, color = NetScopeOnSurface, fontSize = 14.sp, fontWeight = FontWeight.Medium)
                 if (subtitle != null) {
                     Spacer(Modifier.height(2.dp))
                     Text(text = subtitle, color = NetScopeMuted, fontSize = 11.sp, lineHeight = 16.sp)
@@ -437,7 +435,91 @@ private fun SettingsDivider() {
     )
 }
 
-// ── Generic option chip row ───────────────────────────────────────────────────
+// ── Theme mode picker ─────────────────────────────────────────────────────────
+
+@Composable
+private fun ThemeModePicker(
+    selected: ThemeMode,
+    onSelect: (ThemeMode) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        ThemeMode.entries.forEach { mode ->
+            val active = mode == selected
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(if (active) NetScopeAccent.copy(alpha = 0.10f) else NetScopeCardAlt)
+                    .border(
+                        0.5.dp,
+                        if (active) NetScopeAccent.copy(alpha = 0.40f) else NetScopeBorder,
+                        RoundedCornerShape(8.dp),
+                    )
+                    .clickable { onSelect(mode) }
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = mode.label,
+                        color = if (active) NetScopeAccent else NetScopeOnSurface,
+                        fontSize = 13.sp,
+                        fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
+                    )
+                    Text(text = mode.description, color = NetScopeMuted, fontSize = 11.sp)
+                }
+                if (active) {
+                    Icon(Icons.Default.Check, contentDescription = null, tint = NetScopeAccent, modifier = Modifier.size(16.dp))
+                }
+            }
+        }
+    }
+}
+
+// ── Notification style picker ─────────────────────────────────────────────────
+
+@Composable
+private fun NotificationStylePicker(
+    selected: NotificationStyle,
+    onSelect: (NotificationStyle) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        NotificationStyle.entries.forEach { style ->
+            val active = style == selected
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(if (active) NetScopeAccent.copy(alpha = 0.10f) else NetScopeCardAlt)
+                    .border(
+                        0.5.dp,
+                        if (active) NetScopeAccent.copy(alpha = 0.40f) else NetScopeBorder,
+                        RoundedCornerShape(8.dp),
+                    )
+                    .clickable { onSelect(style) }
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = style.label,
+                        color = if (active) NetScopeAccent else NetScopeOnSurface,
+                        fontSize = 13.sp,
+                        fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
+                    )
+                    Text(text = style.description, color = NetScopeMuted, fontSize = 11.sp)
+                }
+                if (active) {
+                    Icon(Icons.Default.Check, contentDescription = null, tint = NetScopeAccent, modifier = Modifier.size(16.dp))
+                }
+            }
+        }
+    }
+}
+
+// ── Generic chip row ──────────────────────────────────────────────────────────
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -448,14 +530,14 @@ private fun <T> OptionChips(
 ) {
     FlowRow(
         horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement   = Arrangement.spacedBy(6.dp),
     ) {
         options.forEach { (value, label) ->
             val active = value == selected
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(20.dp))
-                    .background(if (active) NetScopeAccent.copy(0.15f) else Color(0xFF0F1929))
+                    .background(if (active) NetScopeAccent.copy(0.15f) else NetScopeCardAlt)
                     .border(
                         0.5.dp,
                         if (active) NetScopeAccent.copy(0.55f) else NetScopeBorder,
@@ -477,59 +559,6 @@ private fun <T> OptionChips(
     }
 }
 
-// ── Notification style picker ─────────────────────────────────────────────────
-
-@Composable
-private fun NotificationStylePicker(
-    selected: NotificationStyle,
-    onSelect: (NotificationStyle) -> Unit,
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        NotificationStyle.entries.forEach { style ->
-            val active = style == selected
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(
-                        if (active) NetScopeAccent.copy(alpha = 0.10f) else Color(0xFF0F1929),
-                    )
-                    .border(
-                        0.5.dp,
-                        if (active) NetScopeAccent.copy(alpha = 0.40f) else NetScopeBorder,
-                        RoundedCornerShape(8.dp),
-                    )
-                    .clickable { onSelect(style) }
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = style.label,
-                        color = if (active) NetScopeAccent else Color.White,
-                        fontSize = 13.sp,
-                        fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
-                    )
-                    Text(
-                        text = style.description,
-                        color = NetScopeMuted,
-                        fontSize = 11.sp,
-                    )
-                }
-                if (active) {
-                    Icon(
-                        imageVector = Icons.Default.Check,
-                        contentDescription = null,
-                        tint = NetScopeAccent,
-                        modifier = Modifier.size(16.dp),
-                    )
-                }
-            }
-        }
-    }
-}
-
 // ── Redacted headers editor ───────────────────────────────────────────────────
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -546,7 +575,7 @@ private fun RedactedHeadersEditor(
 ) {
     FlowRow(
         horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement   = Arrangement.spacedBy(6.dp),
     ) {
         headers.sorted().forEach { header ->
             Row(
@@ -557,19 +586,9 @@ private fun RedactedHeadersEditor(
                     .padding(start = 10.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    text = header,
-                    color = NetScopeAccent.copy(alpha = 0.85f),
-                    fontSize = 11.sp,
-                    fontFamily = FontFamily.Monospace,
-                )
+                Text(text = header, color = NetScopeAccent.copy(0.85f), fontSize = 11.sp, fontFamily = FontFamily.Monospace)
                 IconButton(onClick = { onRemove(header) }, modifier = Modifier.size(18.dp)) {
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = "Remove $header",
-                        tint = NetScopeMuted,
-                        modifier = Modifier.size(11.dp),
-                    )
+                    Icon(Icons.Default.Close, contentDescription = "Remove $header", tint = NetScopeMuted, modifier = Modifier.size(11.dp))
                 }
             }
         }
@@ -578,16 +597,13 @@ private fun RedactedHeadersEditor(
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(20.dp))
-                    .background(Color(0xFF0F1929))
+                    .background(NetScopeCardAlt)
                     .border(0.5.dp, NetScopeBorder, RoundedCornerShape(20.dp))
                     .clickable { onAddToggle() }
                     .padding(horizontal = 10.dp, vertical = 5.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     Icon(Icons.Default.Add, contentDescription = null, tint = NetScopeMuted, modifier = Modifier.size(12.dp))
                     Text(text = "Add", color = NetScopeMuted, fontSize = 11.sp)
                 }
@@ -598,44 +614,38 @@ private fun RedactedHeadersEditor(
     AnimatedVisibility(
         visible = showAddField,
         enter = expandVertically(tween(200)) + fadeIn(tween(200)),
-        exit = shrinkVertically(tween(150)) + fadeOut(tween(150)),
+        exit  = shrinkVertically(tween(150)) + fadeOut(tween(150)),
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 8.dp),
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             BasicTextField(
-                value = addInput,
+                value         = addInput,
                 onValueChange = onAddInputChange,
-                textStyle = TextStyle(color = Color.White, fontSize = 12.sp, fontFamily = FontFamily.Monospace),
-                cursorBrush = SolidColor(NetScopeAccent),
-                singleLine = true,
+                textStyle     = TextStyle(color = NetScopeOnSurface, fontSize = 12.sp, fontFamily = FontFamily.Monospace),
+                cursorBrush   = SolidColor(NetScopeAccent),
+                singleLine    = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(onDone = { onConfirmAdd() }),
-                modifier = Modifier
+                modifier      = Modifier
                     .weight(1f)
                     .focusRequester(focusRequester)
                     .clip(RoundedCornerShape(8.dp))
-                    .background(Color(0xFF0A0E1A))
+                    .background(NetScopeCode)
                     .border(0.5.dp, NetScopeBorder, RoundedCornerShape(8.dp))
                     .padding(horizontal = 12.dp, vertical = 8.dp),
                 decorationBox = { inner ->
                     Box {
-                        if (addInput.isEmpty()) {
-                            Text(text = "e.g. X-Api-Key", color = NetScopeMuted, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
-                        }
+                        if (addInput.isEmpty()) Text(text = "e.g. X-Api-Key", color = NetScopeMuted, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
                         inner()
                     }
                 },
             )
             IconButton(
-                onClick = onConfirmAdd,
-                modifier = Modifier
-                    .size(34.dp)
-                    .clip(RoundedCornerShape(8.dp))
+                onClick  = onConfirmAdd,
+                modifier = Modifier.size(34.dp).clip(RoundedCornerShape(8.dp))
                     .background(if (addInput.isNotBlank()) NetScopeAccent.copy(0.15f) else Color.Transparent),
             ) {
                 Icon(Icons.Default.Check, contentDescription = "Confirm", tint = if (addInput.isNotBlank()) NetScopeAccent else NetScopeMuted, modifier = Modifier.size(16.dp))
@@ -652,15 +662,19 @@ private fun RedactedHeadersEditor(
 @Composable
 private fun NetScopeSwitch(checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
     Switch(
-        checked = checked,
+        checked         = checked,
         onCheckedChange = onCheckedChange,
         colors = SwitchDefaults.colors(
-            checkedThumbColor = Color.White,
-            checkedTrackColor = NetScopeAccent,
-            checkedBorderColor = Color.Transparent,
+            checkedThumbColor   = Color.White,
+            checkedTrackColor   = NetScopeAccent,
+            checkedBorderColor  = Color.Transparent,
             uncheckedThumbColor = NetScopeMuted,
-            uncheckedTrackColor = Color(0xFF0F1929),
-            uncheckedBorderColor = NetScopeBorder,
+            uncheckedTrackColor = NetScopeCardAlt,
+            uncheckedBorderColor= NetScopeBorder,
         ),
     )
 }
+
+// ── Private helpers ───────────────────────────────────────────────────────────
+
+private val ColorError = io.netscope.ui.component.ColorError

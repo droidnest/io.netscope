@@ -73,9 +73,13 @@ import io.netscope.model.NetHeader
 import io.netscope.model.NetTransaction
 import io.netscope.ui.component.MethodChip
 import io.netscope.ui.component.NetScopeAccent
+import io.netscope.ui.component.NetScopeBorder
 import io.netscope.ui.component.NetScopeCard
+import io.netscope.ui.component.NetScopeCode
 import io.netscope.ui.component.NetScopeDarkBackground
+import io.netscope.ui.component.NetScopeDropdown
 import io.netscope.ui.component.NetScopeMuted
+import io.netscope.ui.component.NetScopeOnSurface
 import io.netscope.ui.component.NetScopeSurface
 import io.netscope.ui.component.StatusBadge
 import io.netscope.ui.component.color
@@ -118,7 +122,7 @@ fun TransactionDetailScreen(
                 SnackbarHost(hostState = snackbarHostState) { data ->
                     Snackbar(
                         snackbarData = data,
-                        containerColor = Color(0xFF1A2235),
+                        containerColor = NetScopeDropdown,
                         contentColor = Color.White,
                         actionColor = NetScopeAccent,
                         shape = RoundedCornerShape(10.dp),
@@ -141,7 +145,7 @@ fun TransactionDetailScreen(
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                                 contentDescription = "Back",
-                                tint = Color.White,
+                                tint = NetScopeOnSurface,
                             )
                         }
                     },
@@ -174,10 +178,10 @@ fun TransactionDetailScreen(
                             DropdownMenu(
                                 expanded = overflowExpanded,
                                 onDismissRequest = { overflowExpanded = false },
-                                containerColor = Color(0xFF1A2235),
+                                containerColor = NetScopeDropdown,
                             ) {
                                 DropdownMenuItem(
-                                    text = { Text("Copy full summary", color = Color.White, fontSize = 13.sp) },
+                                    text = { Text("Copy full summary", color = NetScopeOnSurface, fontSize = 13.sp) },
                                     leadingIcon = {
                                         Icon(Icons.Default.ContentCopy, contentDescription = null, tint = NetScopeMuted, modifier = Modifier.size(16.dp))
                                     },
@@ -192,7 +196,7 @@ fun TransactionDetailScreen(
                                     },
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("Share as cURL", color = Color.White, fontSize = 13.sp) },
+                                    text = { Text("Share as cURL", color = NetScopeOnSurface, fontSize = 13.sp) },
                                     leadingIcon = {
                                         Icon(Icons.Default.Share, contentDescription = null, tint = NetScopeMuted, modifier = Modifier.size(16.dp))
                                     },
@@ -206,7 +210,7 @@ fun TransactionDetailScreen(
                                     },
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("Share full summary", color = Color.White, fontSize = 13.sp) },
+                                    text = { Text("Share full summary", color = NetScopeOnSurface, fontSize = 13.sp) },
                                     leadingIcon = {
                                         Icon(Icons.Default.Share, contentDescription = null, tint = NetScopeMuted, modifier = Modifier.size(16.dp))
                                     },
@@ -244,7 +248,7 @@ fun TransactionDetailScreen(
                         Text(text = tx.host, color = NetScopeMuted, fontSize = 11.sp)
                         Text(
                             text = tx.path + (tx.query?.let { "?$it" } ?: ""),
-                            color = Color.White,
+                            color = NetScopeOnSurface,
                             fontSize = 13.sp,
                             fontFamily = FontFamily.Monospace,
                         )
@@ -282,7 +286,7 @@ fun TransactionDetailScreen(
                             height = 2.dp,
                         )
                     },
-                    divider = { HorizontalDivider(color = Color(0xFF1E2D45)) },
+                    divider = { HorizontalDivider(color = NetScopeBorder) },
                 ) {
                     tabs.forEachIndexed { index, title ->
                         Tab(
@@ -447,7 +451,7 @@ private fun TimingTimeline(tx: NetTransaction) {
             )
             Text(
                 text = "${seg.durationMs}ms",
-                color = Color.White,
+                color = NetScopeOnSurface,
                 fontSize = 11.sp,
                 fontFamily = FontFamily.Monospace,
             )
@@ -630,7 +634,7 @@ private fun InfoRow(label: String, value: String) {
         )
         Text(
             text = value,
-            color = Color.White,
+            color = NetScopeOnSurface,
             fontSize = 12.sp,
             fontFamily = FontFamily.Monospace,
             modifier = Modifier.weight(0.65f),
@@ -670,7 +674,7 @@ private fun BodyView(body: String) {
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(8.dp))
-            .background(Color(0xFF0A0E1A))
+            .background(NetScopeCode)
             .horizontalScroll(scrollState)
             .padding(12.dp),
     ) {
