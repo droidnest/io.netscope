@@ -1,7 +1,5 @@
 import com.vanniktech.maven.publish.MavenPublishBaseExtension
 import com.vanniktech.maven.publish.SonatypeHost
-import org.gradle.api.publish.PublishingExtension
-import org.gradle.plugins.signing.SigningExtension
 
 plugins {
     alias(libs.plugins.android.library) apply false
@@ -62,33 +60,4 @@ subprojects {
         }
     }
 
-    // ── Explicit signing — must run after publishing extension is configured ──
-    plugins.withId("com.vanniktech.maven.publish") {
-        afterEvaluate {
-            val inMemoryKey = findProperty("signingInMemoryKey") as String?
-            val inMemoryKeyId = findProperty("signingInMemoryKeyId") as String?
-            val inMemoryKeyPwd = findProperty("signingInMemoryKeyPassword") as String? ?: ""
-
-            val isCI = System.getenv("CI") == "true"
-
-            if (inMemoryKey.isNullOrBlank()) {
-                if (isCI) {
-                    throw GradleException(
-                        "[${project.name}] CI build detected but signingInMemoryKey is not set. " +
-                        "Add SIGNING_KEY to GitHub repository secrets and ensure the workflow " +
-                        "sets ORG_GRADLE_PROJECT_signingInMemoryKey."
-                    )
-                }
-                // Local build without signing — skip
-                logger.lifecycle("[${project.name}] No signing key found — skipping signing (local build).")
-                return@afterEvaluate
-            }
-
-            apply(plugin = "signing")
-            extensions.configure<SigningExtension> {
-                useInMemoryPgpKeys(inMemoryKeyId, inMemoryKey, inMemoryKeyPwd)
-                sign(extensions.getByType<PublishingExtension>().publications)
-            }
-        }
-    }
 }

@@ -2,9 +2,15 @@ plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.vanniktech.publish)
+    signing
 }
 
 mavenPublishing {
+}
+
+signing {
+    useGpgCmd()
+    sign(publishing.publications)
 }
 
 
