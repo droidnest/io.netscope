@@ -9,6 +9,9 @@ plugins {
     alias(libs.plugins.kotlin.compose) apply false
 }
 
+val libVersion = project.properties["VERSION_NAME"] as String
+val libGroup   = project.properties["GROUP"] as String
+
 val descriptions = mapOf(
     "netscope-core"         to "NetScope — Core interceptor and storage module.",
     "netscope-ui"           to "NetScope — Compose UI module.",
@@ -24,7 +27,7 @@ subprojects {
         extensions.configure<MavenPublishBaseExtension> {
             publishToMavenCentral(SonatypeHost.CENTRAL_PORTAL)
             signAllPublications()  // reads ORG_GRADLE_PROJECT_signingInMemoryKey* on CI
-            coordinates("io.github.nidhal92", artifactId, "0.3.0")
+            coordinates(libGroup, artifactId, libVersion)
             pom {
                 name.set(artifactId)
                 description.set(descriptions[artifactId] ?: "NetScope")
