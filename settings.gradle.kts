@@ -15,5 +15,8 @@ dependencyResolutionManagement {
 }
 include(":netscope-core")
 include(":netscope-ui")
+include(":netscope-notification")
+include(":netscope-export")
 include(":netscope-no-op")
+include(":sample")
 

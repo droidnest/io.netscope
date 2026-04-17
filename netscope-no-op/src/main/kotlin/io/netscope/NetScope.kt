@@ -1,6 +1,9 @@
 package io.netscope
 
 import android.content.Context
+import io.netscope.shake.NetScopeShakeDetector
+import okhttp3.Call
+import okhttp3.EventListener
 import okhttp3.Interceptor
 import okhttp3.Response
 
@@ -24,7 +27,21 @@ object NetScope {
         block: ConfigBuilder.() -> Unit = {},
     ): Interceptor = NoOpInterceptor()
 
+    /** No-op: returns a pass-through [EventListener.Factory]. */
+    fun timingListenerFactory(): EventListener.Factory =
+        EventListener.Factory { EventListener.NONE }
+
     fun isInitialized(): Boolean = false
+
+    // ── Shake detector ────────────────────────────────────────────────────────
+
+    val shakeEnabled: Boolean = false
+    fun registerShakeDetector(detector: NetScopeShakeDetector) = Unit
+    fun setShakeEnabled(enabled: Boolean) = Unit
+
+    // ── Notification style ────────────────────────────────────────────────────
+
+    var notificationStyle: NotificationStyle = NotificationStyle.DETAILED
 
     class ConfigBuilder {
         fun maxTransactions(count: Int) = this

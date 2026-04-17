@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Minimal WiFi/signal icon — monochrome, suitable for the status bar -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- outer arc -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M1,9 C3.93,6.07 7.96,4.5 12,4.5 16.04,4.5 20.07,6.07 23,9L21.19,10.81 C18.76,8.38 15.5,7 12,7 8.5,7 5.24,8.38 2.81,10.81Z" />
+    <!-- middle arc -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M5,13 C6.82,11.18 9.31,10 12,10 14.69,10 17.18,11.18 19,13L17.18,14.82 C15.9,13.54 14.04,12.75 12,12.75 9.96,12.75 8.1,13.54 6.82,14.82Z" />
+    <!-- dot -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M12,17 m-2,0 a2,2 0,1,0 4,0 a2,2 0,1,0 -4,0" />
+</vector>

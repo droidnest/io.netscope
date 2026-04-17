@@ -3,14 +3,18 @@ import com.vanniktech.maven.publish.SonatypeHost
 
 plugins {
     alias(libs.plugins.android.library) apply false
+    alias(libs.plugins.android.application) apply false
     alias(libs.plugins.ksp) apply false
     alias(libs.plugins.vanniktech.publish) apply false
+    alias(libs.plugins.kotlin.compose) apply false
 }
 
 val descriptions = mapOf(
-    "netscope-core"  to "NetScope — Core interceptor and storage module.",
-    "netscope-ui"    to "NetScope — Compose UI module.",
-    "netscope-no-op" to "NetScope — Release no-op stub, zero overhead.",
+    "netscope-core"         to "NetScope — Core interceptor and storage module.",
+    "netscope-ui"           to "NetScope — Compose UI module.",
+    "netscope-notification" to "NetScope — Persistent notification with live request stats.",
+    "netscope-export"       to "NetScope — Export transactions as cURL or HAR.",
+    "netscope-no-op"        to "NetScope — Release no-op stub, zero overhead.",
 )
 
 subprojects {
@@ -19,9 +23,8 @@ subprojects {
         val artifactId = project.name
         extensions.configure<MavenPublishBaseExtension> {
             publishToMavenCentral(SonatypeHost.CENTRAL_PORTAL)
-            signAllPublications()
-            coordinates("io.github.nidhal92", artifactId, "0.1.0")
-            // coordinates("io.netscope", artifactId, "0.1.0")
+            signAllPublications()  // reads ORG_GRADLE_PROJECT_signingInMemoryKey* on CI
+            coordinates("io.github.nidhal92", artifactId, "0.3.0")
             pom {
                 name.set(artifactId)
                 description.set(descriptions[artifactId] ?: "NetScope")

@@ -10,7 +10,7 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        minSdk = 21
+        minSdk = 23
         consumerProguardFiles("consumer-rules.pro")
     }
 
@@ -25,7 +25,7 @@ android {
 dependencies {
     // OkHttp — provided by consumer, not bundled
     compileOnly(libs.okhttp)
-
+    implementation(libs.gson)
     // Room
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)

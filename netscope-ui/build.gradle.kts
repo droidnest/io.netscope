@@ -1,6 +1,8 @@
 plugins {
     alias(libs.plugins.android.library)
+    alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.vanniktech.publish)
+
 }
 
 
@@ -9,7 +11,8 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        minSdk = 21
+        minSdk = 23
+        consumerProguardFiles("consumer-rules.pro")
     }
 
     buildFeatures {
@@ -27,6 +30,7 @@ android {
 
 dependencies {
     api(project(":netscope-core"))
+    implementation(project(":netscope-export"))
 
     val composeBom = platform(libs.compose.bom)
     implementation(composeBom)

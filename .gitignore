@@ -1,0 +1,35 @@
+# ─── Build outputs ────────────────────────────────────────────────────────────
+build/
+**/build/
+
+# ─── Gradle internals ─────────────────────────────────────────────────────────
+.gradle/
+gradle/wrapper/gradle-wrapper.jar
+
+# ─── Android Studio / IntelliJ ────────────────────────────────────────────────
+.idea/caches/
+.idea/libraries/
+.idea/modules.xml
+.idea/workspace.xml
+.idea/navEditor.xml
+.idea/assetWizardSettings.xml
+.idea/*.iml
+*.iml
+
+# ─── OS artefacts ─────────────────────────────────────────────────────────────
+.DS_Store
+**/.DS_Store
+Thumbs.db
+
+# ─── Local developer config ───────────────────────────────────────────────────
+local.properties
+keystore.properties
+
+# ─── Signing secrets ──────────────────────────────────────────────────────────
+*.jks
+*.keystore
+*.p12
+
+# ─── Profiling / captures ─────────────────────────────────────────────────────
+captures/
+*.hprof

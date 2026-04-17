@@ -19,6 +19,12 @@ data class TransactionEntity(
     val responseDate: Long?,
     val durationMs: Long?,
 
+    // Network phase timing (nullable — null means connection was reused or not measured)
+    val dnsMs: Long?,
+    val connectMs: Long?,
+    val sslMs: Long?,
+    val ttfbMs: Long?,
+
     // Request
     val method: String,
     val scheme: String,

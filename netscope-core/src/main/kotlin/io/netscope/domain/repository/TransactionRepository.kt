@@ -16,6 +16,9 @@ interface TransactionRepository {
     /** Returns a single transaction by ID, or null if not found. */
     suspend fun getById(id: Long): NetTransaction?
 
+    /** Updates only the network-phase timing columns (DNS / Connect / TLS / TTFB). */
+    suspend fun updateTiming(id: Long, dnsMs: Long?, connectMs: Long?, sslMs: Long?, ttfbMs: Long?)
+
     /** Removes all stored transactions. */
     suspend fun clearAll()
 }
