@@ -16,7 +16,7 @@ signing {
 
 android {
     namespace = "io.netscope.core"
-    compileSdk = 36
+    compileSdk = 35
 
     defaultConfig {
         minSdk = 23
