@@ -3,6 +3,10 @@ plugins {
     alias(libs.plugins.vanniktech.publish)
 }
 
+mavenPublishing {
+    signAllPublications()
+}
+
 android {
     namespace = "io.netscope.export"
     compileSdk = 36

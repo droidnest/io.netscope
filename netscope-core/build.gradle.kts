@@ -4,6 +4,10 @@ plugins {
     alias(libs.plugins.vanniktech.publish)
 }
 
+mavenPublishing {
+    signAllPublications()
+}
+
 
 android {
     namespace = "io.netscope.core"
