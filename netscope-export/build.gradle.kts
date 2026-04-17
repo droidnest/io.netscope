@@ -4,6 +4,8 @@ plugins {
 }
 
 mavenPublishing {
+    signAllPublications()
+
 }
 
 android {
