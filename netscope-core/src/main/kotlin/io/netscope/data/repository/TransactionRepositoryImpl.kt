@@ -11,7 +11,7 @@ import kotlinx.coroutines.flow.map
 
 internal class TransactionRepositoryImpl(
     private val dao: TransactionDao,
-    private val config: NetScopeConfig,
+    internal var config: NetScopeConfig,
 ) : TransactionRepository {
 
     override suspend fun insert(transaction: NetTransaction): Long {

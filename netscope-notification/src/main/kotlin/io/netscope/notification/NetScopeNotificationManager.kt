@@ -8,6 +8,7 @@ import androidx.core.app.NotificationChannelCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import io.netscope.NetScope
+import io.netscope.NotificationStyle
 import io.netscope.model.NetTransaction
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -104,6 +105,43 @@ object NetScopeNotificationManager {
     }
 
     private fun post(
+        context: Context,
+        transactions: List<NetTransaction>,
+        tapIntent: PendingIntent?,
+    ) {
+        // Respect the user's notification style preference.
+        when (NetScope.notificationStyle) {
+            NotificationStyle.NONE -> {
+                NotificationManagerCompat.from(context).cancel(NOTIFICATION_ID)
+                return
+            }
+            NotificationStyle.MINIMAL -> postMinimal(context, transactions, tapIntent)
+            NotificationStyle.DETAILED -> postDetailed(context, transactions, tapIntent)
+        }
+    }
+
+    private fun postMinimal(
+        context: Context,
+        transactions: List<NetTransaction>,
+        tapIntent: PendingIntent?,
+    ) {
+        val total = transactions.size
+        val title = "$total request${if (total != 1) "s" else ""} captured"
+
+        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_netscope_notif)
+            .setContentTitle(title)
+            .setOngoing(true)
+            .setSilent(true)
+            .setVisibility(NotificationCompat.VISIBILITY_SECRET)
+            .setCategory(NotificationCompat.CATEGORY_STATUS)
+            .apply { tapIntent?.let { setContentIntent(it) } }
+            .build()
+
+        NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, notification)
+    }
+
+    private fun postDetailed(
         context: Context,
         transactions: List<NetTransaction>,
         tapIntent: PendingIntent?,
