@@ -2,9 +2,20 @@ plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.ksp)
     alias(libs.plugins.vanniktech.publish)
+    signing
 }
 
 mavenPublishing {
+}
+
+signing {
+    val key      = findProperty("signingInMemoryKey")      as String?
+    val keyId    = findProperty("signingInMemoryKeyId")    as String?
+    val password = findProperty("signingInMemoryKeyPassword") as String? ?: ""
+    if (!key.isNullOrBlank()) {
+        useInMemoryPgpKeys(keyId, key, password)
+    }
+    sign(publishing.publications)
 }
 
 
