@@ -26,7 +26,8 @@ subprojects {
         val artifactId = project.name
         extensions.configure<MavenPublishBaseExtension> {
             publishToMavenCentral(SonatypeHost.CENTRAL_PORTAL)
-            signAllPublications()  // reads ORG_GRADLE_PROJECT_signingInMemoryKey* on CI
+            // signAllPublications() is called inside each module's own build.gradle.kts
+            // so it runs in the correct project scope and can read signingInMemoryKey*.
             coordinates(libGroup, artifactId, libVersion)
             pom {
                 name.set(artifactId)
