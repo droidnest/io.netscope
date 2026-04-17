@@ -12,7 +12,8 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -22,9 +23,20 @@ jobs:
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
+        with:
+          # Configuration cache is incompatible with subprojects{} in Gradle 9.
+          # Disable it here so the vanniktech publish tasks resolve correctly.
+          cache-read-only: false
+
+      - name: Make gradlew executable
+        run: chmod +x gradlew
 
       - name: Publish to Maven Central
-        run: ./gradlew publishAllPublicationsToMavenCentralRepository --no-daemon
+        run: >
+          ./gradlew publishAllPublicationsToMavenCentralRepository
+          --no-configuration-cache
+          --no-daemon
+          --stacktrace
         env:
           CI: "true"
           ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
