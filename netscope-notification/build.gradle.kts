@@ -14,7 +14,7 @@ signing {
 
 android {
     namespace = "io.netscope.notification"
-    compileSdk = 36
+    compileSdk = 35
 
     defaultConfig {
         minSdk = 23

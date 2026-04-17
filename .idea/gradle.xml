@@ -11,8 +11,11 @@
           <set>
             <option value="$PROJECT_DIR$" />
             <option value="$PROJECT_DIR$/netscope-core" />
+            <option value="$PROJECT_DIR$/netscope-export" />
             <option value="$PROJECT_DIR$/netscope-no-op" />
+            <option value="$PROJECT_DIR$/netscope-notification" />
             <option value="$PROJECT_DIR$/netscope-ui" />
+            <option value="$PROJECT_DIR$/sample" />
           </set>
         </option>
       </GradleProjectSettings>
