@@ -119,6 +119,7 @@ object NetScope {
 
     // ── Internal ──────────────────────────────────────────────────────────────
 
+
     private fun init(context: Context, config: NetScopeConfig) {
         val db = NetScopeDatabase.getInstance(context)
         _config = config
