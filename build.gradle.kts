@@ -23,11 +23,8 @@ subprojects {
         val artifactId = project.name
         extensions.configure<MavenPublishBaseExtension> {
             publishToMavenCentral(SonatypeHost.CENTRAL_PORTAL)
-            if (System.getenv("CI") == "true") {
-                signAllPublications()
-            }
-            coordinates("io.github.nidhal92", artifactId, "0.1.0")
-            // coordinates("io.netscope", artifactId, "0.1.0")
+            signAllPublications()  // reads ORG_GRADLE_PROJECT_signingInMemoryKey* on CI
+            coordinates("io.github.nidhal92", artifactId, "0.3.0")
             pom {
                 name.set(artifactId)
                 description.set(descriptions[artifactId] ?: "NetScope")
