@@ -34,7 +34,7 @@
 **`libs.versions.toml`**
 ```toml
 [versions]
-netscope = "0.3.0"
+netscope = "0.3.1"
 
 [libraries]
 netscope-core         = { group = "io.github.nidhal92", name = "netscope-core",         version.ref = "netscope" }

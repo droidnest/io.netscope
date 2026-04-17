@@ -118,7 +118,7 @@ object NetScopeExporter {
                 "version" to "1.2",
                 "creator" to mapOf(
                     "name" to "NetScope",
-                    "version" to "0.3.0",
+                    "version" to "0.3.1",
                 ),
                 "entries" to entries,
             ),
