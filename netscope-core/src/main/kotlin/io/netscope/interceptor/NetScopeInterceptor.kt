@@ -28,7 +28,7 @@ import java.nio.charset.Charset
  */
 class NetScopeInterceptor internal constructor(
     private val repository: TransactionRepository,
-    private val config: NetScopeConfig,
+    internal var config: NetScopeConfig,
     /** Optional timing factory — when set, the interceptor registers call→id mappings. */
     internal var timingFactory: NetScopeTimingListenerFactory? = null,
 ) : Interceptor {

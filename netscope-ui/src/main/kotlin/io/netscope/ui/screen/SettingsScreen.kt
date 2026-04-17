@@ -76,8 +76,9 @@ import io.netscope.ui.component.NetScopeDarkBackground
 import io.netscope.ui.component.NetScopeMuted
 import io.netscope.ui.component.NetScopeOnSurface
 import io.netscope.ui.component.NetScopeSurface
+import io.netscope.NetScope
+import io.netscope.NotificationStyle
 import io.netscope.ui.preferences.NetScopePreferences
-import io.netscope.ui.preferences.NotificationStyle
 import io.netscope.ui.preferences.ThemeMode
 
 // ── Picker options ────────────────────────────────────────────────────────────
@@ -185,7 +186,11 @@ fun SettingsScreen(
                     OptionChips(
                         options  = MAX_TX_OPTIONS,
                         selected = maxTransactions,
-                        onSelect = { v -> maxTransactions = v; prefs.maxTransactions = v },
+                        onSelect = { v ->
+                            maxTransactions = v
+                            prefs.maxTransactions = v
+                            NetScope.updateConfig { copy(maxTransactions = v) }
+                        },
                     )
                 }
 
@@ -198,7 +203,11 @@ fun SettingsScreen(
                     OptionChips(
                         options  = BODY_SIZE_OPTIONS,
                         selected = maxBodySize,
-                        onSelect = { v -> maxBodySize = v; prefs.maxBodySizeBytes = v },
+                        onSelect = { v ->
+                            maxBodySize = v
+                            prefs.maxBodySizeBytes = v
+                            NetScope.updateConfig { copy(maxBodySize = v) }
+                        },
                     )
                 }
 
@@ -210,7 +219,11 @@ fun SettingsScreen(
                     trailing = {
                         NetScopeSwitch(
                             checked         = alwaysReadBody,
-                            onCheckedChange = { v -> alwaysReadBody = v; prefs.alwaysReadResponseBody = v },
+                            onCheckedChange = { v ->
+                                alwaysReadBody = v
+                                prefs.alwaysReadResponseBody = v
+                                NetScope.updateConfig { copy(alwaysReadResponseBody = v) }
+                            },
                         )
                     },
                 )
@@ -239,6 +252,7 @@ fun SettingsScreen(
                                 val updated = redactedHeaders + trimmed.lowercase()
                                 redactedHeaders = updated
                                 prefs.redactedHeaders = updated
+                                NetScope.updateConfig { copy(redactedHeaders = updated.map { it.lowercase() }.toSet()) }
                             }
                             addHeaderInput = ""
                             showAddHeaderField = false
@@ -248,6 +262,7 @@ fun SettingsScreen(
                             val updated = redactedHeaders - header
                             redactedHeaders = updated
                             prefs.redactedHeaders = updated
+                            NetScope.updateConfig { copy(redactedHeaders = updated.map { it.lowercase() }.toSet()) }
                         },
                     )
                 }
@@ -262,7 +277,11 @@ fun SettingsScreen(
                     trailing = {
                         NetScopeSwitch(
                             checked         = shakeToOpen,
-                            onCheckedChange = { v -> shakeToOpen = v; prefs.shakeToOpen = v },
+                            onCheckedChange = { v ->
+                                shakeToOpen = v
+                                prefs.shakeToOpen = v
+                                NetScope.setShakeEnabled(v)
+                            },
                         )
                     },
                 )
@@ -275,7 +294,11 @@ fun SettingsScreen(
                 ) {
                     NotificationStylePicker(
                         selected = notifStyle,
-                        onSelect = { v -> notifStyle = v; prefs.notificationStyle = v },
+                        onSelect = { v ->
+                            notifStyle = v
+                            prefs.notificationStyle = v
+                            NetScope.notificationStyle = v
+                        },
                     )
                 }
             }

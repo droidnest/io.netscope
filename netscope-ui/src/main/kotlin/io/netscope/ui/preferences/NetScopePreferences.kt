@@ -2,6 +2,7 @@ package io.netscope.ui.preferences
 
 import android.content.Context
 import androidx.core.content.edit
+import io.netscope.NotificationStyle
 
 /**
  * Thin SharedPreferences wrapper that persists NetScope UI settings.
@@ -79,14 +80,5 @@ enum class ThemeMode(val key: String, val label: String, val description: String
     }
 }
 
-// ── NotificationStyle ─────────────────────────────────────────────────────────
-
-enum class NotificationStyle(val key: String, val label: String, val description: String) {
-    NONE    ("none",     "Off",      "No notification shown"),
-    MINIMAL ("minimal",  "Minimal",  "Live request counter only"),
-    DETAILED("detailed", "Detailed", "Counter · errors · avg time");
-
-    companion object {
-        fun fromKey(key: String?) = entries.firstOrNull { it.key == key } ?: DETAILED
-    }
-}
+// NotificationStyle is defined in netscope-core as io.netscope.NotificationStyle
+// and re-exported here via the import above for backward compatibility.

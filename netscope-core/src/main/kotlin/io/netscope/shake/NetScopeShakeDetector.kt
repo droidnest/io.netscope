@@ -5,6 +5,7 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import io.netscope.NetScope
 
 /**
  * Detects a shake gesture using the accelerometer and invokes [onShake].
@@ -72,6 +73,7 @@ class NetScopeShakeDetector(
      * A no-op when no accelerometer is present.
      */
     fun start() {
+        if (NetScope.isInitialized() && !NetScope.shakeEnabled) return
         accelerometer?.let {
             sensorManager.registerListener(listener, it, SensorManager.SENSOR_DELAY_GAME)
         }

@@ -55,6 +55,7 @@ import io.netscope.NetScope
 import io.netscope.notification.NetScopeNotificationManager
 import io.netscope.shake.NetScopeShakeDetector
 import io.netscope.ui.NetScopeActivity
+import io.netscope.ui.preferences.NetScopePreferences
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -96,6 +97,10 @@ class MainActivity : ComponentActivity() {
         shakeDetector = NetScopeShakeDetector(this) {
             runOnUiThread { NetScopeActivity.launch(this) }
         }
+        // Register with NetScope so the Settings toggle can start/stop it at runtime.
+        NetScope.registerShakeDetector(shakeDetector)
+        // Sync the runtime flag with whatever the user last saved.
+        NetScope.setShakeEnabled(NetScopePreferences(this).shakeToOpen)
 
         setContent {
             MaterialTheme {
@@ -106,6 +111,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        // start() internally checks NetScope.shakeEnabled, so this is safe even
+        // when the user has disabled the gesture in Settings.
         shakeDetector.start()
     }
 
