@@ -34,9 +34,13 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.FilterListOff
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Sort
+import androidx.compose.ui.platform.LocalContext
+import io.netscope.export.NetScopeExporter
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -103,7 +107,9 @@ fun TransactionListScreen(
     val transactions by viewModel.transactions.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
     val filterState by viewModel.filterState.collectAsState()
+    val context = LocalContext.current
     var sortMenuExpanded by remember { mutableStateOf(false) }
+    var exportMenuExpanded by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -195,6 +201,37 @@ fun TransactionListScreen(
                             }
                         }
                     }
+                    // Export
+                    Box {
+                        IconButton(onClick = { exportMenuExpanded = true }) {
+                            Icon(
+                                imageVector = Icons.Default.MoreVert,
+                                contentDescription = "More options",
+                                tint = NetScopeMuted,
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = exportMenuExpanded,
+                            onDismissRequest = { exportMenuExpanded = false },
+                            containerColor = NetScopeDropdown,
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Export all as HAR", color = NetScopeOnSurface, fontSize = 13.sp) },
+                                leadingIcon = {
+                                    Icon(Icons.Default.Share, contentDescription = null, tint = NetScopeMuted, modifier = Modifier.size(16.dp))
+                                },
+                                enabled = transactions.isNotEmpty(),
+                                onClick = {
+                                    exportMenuExpanded = false
+                                    NetScopeExporter.share(
+                                        context = context,
+                                        text = NetScopeExporter.toHar(transactions),
+                                        chooserTitle = "Export as HAR",
+                                    )
+                                },
+                            )
+                        }
+                    }
                     // Clear all
                     IconButton(onClick = { viewModel.clearAllTransactions() }) {
                         Icon(
@@ -222,7 +259,11 @@ fun TransactionListScreen(
             )
 
             // Filter chips — single scrollable row
-            FilterBar(filterState = filterState, viewModel = viewModel)
+            FilterBar(
+                filterState = filterState,
+                onMethodToggle = viewModel::toggleMethodFilter,
+                onStatusToggle = viewModel::toggleStatusClassFilter,
+            )
 
             // Stats summary — count · errors · avg time
             if (transactions.isNotEmpty()) {
@@ -304,7 +345,11 @@ private fun StatsBar(transactions: List<NetTransaction>) {
 // ── Filter bar — single scrollable row ───────────────────────────────────────
 
 @Composable
-private fun FilterBar(filterState: FilterState, viewModel: NetScopeViewModel) {
+private fun FilterBar(
+    filterState: FilterState,
+    onMethodToggle: (String) -> Unit,
+    onStatusToggle: (NetTransaction.StatusClass) -> Unit,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -320,7 +365,7 @@ private fun FilterBar(filterState: FilterState, viewModel: NetScopeViewModel) {
                 label = method,
                 active = active,
                 activeColor = method.methodColor(),
-                onClick = { viewModel.toggleMethodFilter(method) },
+                onClick = { onMethodToggle(method) },
             )
         }
 
@@ -339,7 +384,7 @@ private fun FilterBar(filterState: FilterState, viewModel: NetScopeViewModel) {
                 label = label,
                 active = active,
                 activeColor = classes.first().color(),
-                onClick = { classes.forEach { viewModel.toggleStatusClassFilter(it) } },
+                onClick = { classes.forEach { onStatusToggle(it) } },
             )
         }
     }
@@ -395,7 +440,7 @@ private fun SearchBar(
             value = query,
             onValueChange = onQueryChange,
             textStyle = TextStyle(
-                color = Color.White,
+                color = NetScopeOnSurface,
                 fontSize = 13.sp,
                 fontFamily = FontFamily.Monospace,
             ),

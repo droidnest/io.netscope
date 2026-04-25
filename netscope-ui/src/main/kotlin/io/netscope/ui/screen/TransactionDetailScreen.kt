@@ -80,6 +80,7 @@ import io.netscope.ui.component.NetScopeDarkBackground
 import io.netscope.ui.component.NetScopeDropdown
 import io.netscope.ui.component.NetScopeMuted
 import io.netscope.ui.component.NetScopeOnSurface
+import io.netscope.ui.component.ColorError
 import io.netscope.ui.component.NetScopeSurface
 import io.netscope.ui.component.StatusBadge
 import io.netscope.ui.component.color
@@ -99,7 +100,7 @@ fun TransactionDetailScreen(
     var selectedTab by remember { mutableIntStateOf(0) }
     var previousTab by remember { mutableIntStateOf(0) }
     var overflowExpanded by remember { mutableStateOf(false) }
-    val tabs = listOf("Overview", "Request", "Response")
+    val tabs = listOf("Overview", "Request", "Response", "Timing")
     val context = LocalContext.current
 
     // ── Snackbar ──────────────────────────────────────────────────────────────
@@ -223,6 +224,20 @@ fun TransactionDetailScreen(
                                         )
                                     },
                                 )
+                                DropdownMenuItem(
+                                    text = { Text("Share as HAR", color = NetScopeOnSurface, fontSize = 13.sp) },
+                                    leadingIcon = {
+                                        Icon(Icons.Default.Share, contentDescription = null, tint = NetScopeMuted, modifier = Modifier.size(16.dp))
+                                    },
+                                    onClick = {
+                                        overflowExpanded = false
+                                        NetScopeExporter.share(
+                                            context = context,
+                                            text = NetScopeExporter.toHar(listOf(tx)),
+                                            chooserTitle = "Share as HAR",
+                                        )
+                                    },
+                                )
                             }
                         }
                     },
@@ -321,6 +336,7 @@ fun TransactionDetailScreen(
                         0    -> OverviewTab(tx)
                         1    -> RequestTab(tx, context, onCopied)
                         2    -> ResponseTab(tx, context, onCopied)
+                        3    -> TimingTab(tx)
                         else -> Unit
                     }
                 }
@@ -333,7 +349,6 @@ fun TransactionDetailScreen(
 
 @Composable
 private fun OverviewTab(tx: NetTransaction) {
-    val dateFormat = remember { SimpleDateFormat("HH:mm:ss.SSS", Locale.getDefault()) }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -341,21 +356,6 @@ private fun OverviewTab(tx: NetTransaction) {
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        SectionCard(title = "Timing") {
-            InfoRow("Started", dateFormat.format(Date(tx.requestDate)))
-            tx.responseDate?.let { InfoRow("Completed", dateFormat.format(Date(it))) }
-            tx.durationMs?.let { InfoRow("Duration", "${it}ms") }
-        }
-
-        // Network phase timeline (only when EventListener data is present)
-        val hasPhaseData = tx.dnsMs != null || tx.connectMs != null ||
-                tx.sslMs != null || tx.ttfbMs != null
-        if (hasPhaseData) {
-            SectionCard(title = "Network Phases") {
-                TimingTimeline(tx)
-            }
-        }
-
         SectionCard(title = "Request") {
             InfoRow("Method", tx.method)
             InfoRow("URL", tx.url)
@@ -373,10 +373,38 @@ private fun OverviewTab(tx: NetTransaction) {
             SectionCard(title = "Error") {
                 Text(
                     text = it,
-                    color = Color(0xFFFF4D6A),
+                    color = ColorError,
                     fontSize = 12.sp,
                     fontFamily = FontFamily.Monospace,
                 )
+            }
+        }
+    }
+}
+
+// ── Tab: Timing ───────────────────────────────────────────────────────────────
+
+@Composable
+private fun TimingTab(tx: NetTransaction) {
+    val dateFormat = remember { SimpleDateFormat("HH:mm:ss.SSS", Locale.getDefault()) }
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        SectionCard(title = "Timing") {
+            InfoRow("Started", dateFormat.format(Date(tx.requestDate)))
+            tx.responseDate?.let { InfoRow("Completed", dateFormat.format(Date(it))) }
+            tx.durationMs?.let { InfoRow("Duration", "${it}ms") }
+        }
+
+        val hasPhaseData = tx.dnsMs != null || tx.connectMs != null ||
+                tx.sslMs != null || tx.ttfbMs != null
+        if (hasPhaseData) {
+            SectionCard(title = "Network Phases") {
+                TimingTimeline(tx)
             }
         }
     }
@@ -462,59 +490,43 @@ private fun TimingTimeline(tx: NetTransaction) {
 // ── Tab: Request ──────────────────────────────────────────────────────────────
 
 @Composable
-private fun RequestTab(
-    tx: NetTransaction,
-    context: android.content.Context,
-    onCopied: (String) -> Unit,
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        if (tx.requestHeaders.isNotEmpty()) {
-            SectionCard(
-                title = "Headers (${tx.requestHeaders.size})",
-                onCopy = {
-                    NetScopeExporter.copyToClipboard(
-                        context = context,
-                        text = NetScopeExporter.headersText(tx.requestHeaders),
-                        label = "Request headers",
-                    )
-                    onCopied("Request headers")
-                },
-            ) {
-                HeaderTable(tx.requestHeaders)
-            }
-        }
-        tx.requestBody?.let { body ->
-            SectionCard(
-                title = "Body",
-                onCopy = {
-                    NetScopeExporter.copyToClipboard(
-                        context = context,
-                        text = body,
-                        label = "Request body",
-                    )
-                    onCopied("Request body")
-                },
-            ) {
-                BodyView(body)
-            }
-        }
-        if (tx.requestHeaders.isEmpty() && tx.requestBody == null) {
-            EmptyTabState("No request data captured")
-        }
-    }
+private fun RequestTab(tx: NetTransaction, context: android.content.Context, onCopied: (String) -> Unit) {
+    HttpMessageTab(
+        headers = tx.requestHeaders,
+        body = tx.requestBody,
+        emptyMessage = "No request data captured",
+        headersLabel = "Request headers",
+        bodyLabel = "Request body",
+        context = context,
+        onCopied = onCopied,
+    )
 }
 
 // ── Tab: Response ─────────────────────────────────────────────────────────────
 
 @Composable
-private fun ResponseTab(
-    tx: NetTransaction,
+private fun ResponseTab(tx: NetTransaction, context: android.content.Context, onCopied: (String) -> Unit) {
+    HttpMessageTab(
+        headers = tx.responseHeaders,
+        body = tx.responseBody,
+        emptyMessage = if (tx.statusClass == NetTransaction.StatusClass.PENDING) "Waiting for response…"
+                       else "No response data captured",
+        headersLabel = "Response headers",
+        bodyLabel = "Response body",
+        context = context,
+        onCopied = onCopied,
+    )
+}
+
+// ── Tab: HTTP message (shared by Request + Response) ─────────────────────────
+
+@Composable
+private fun HttpMessageTab(
+    headers: List<NetHeader>,
+    body: String?,
+    emptyMessage: String,
+    headersLabel: String,
+    bodyLabel: String,
     context: android.content.Context,
     onCopied: (String) -> Unit,
 ) {
@@ -525,41 +537,30 @@ private fun ResponseTab(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        if (tx.responseHeaders.isNotEmpty()) {
+        if (headers.isNotEmpty()) {
             SectionCard(
-                title = "Headers (${tx.responseHeaders.size})",
+                title = "Headers (${headers.size})",
                 onCopy = {
-                    NetScopeExporter.copyToClipboard(
-                        context = context,
-                        text = NetScopeExporter.headersText(tx.responseHeaders),
-                        label = "Response headers",
-                    )
-                    onCopied("Response headers")
+                    NetScopeExporter.copyToClipboard(context, NetScopeExporter.headersText(headers), headersLabel)
+                    onCopied(headersLabel)
                 },
             ) {
-                HeaderTable(tx.responseHeaders)
+                HeaderTable(headers)
             }
         }
-        tx.responseBody?.let { body ->
+        body?.let { b ->
             SectionCard(
                 title = "Body",
                 onCopy = {
-                    NetScopeExporter.copyToClipboard(
-                        context = context,
-                        text = body,
-                        label = "Response body",
-                    )
-                    onCopied("Response body")
+                    NetScopeExporter.copyToClipboard(context, b, bodyLabel)
+                    onCopied(bodyLabel)
                 },
             ) {
-                BodyView(body)
+                BodyView(b)
             }
         }
-        if (tx.responseHeaders.isEmpty() && tx.responseBody == null) {
-            EmptyTabState(
-                if (tx.statusClass == NetTransaction.StatusClass.PENDING) "Waiting for response…"
-                else "No response data captured"
-            )
+        if (headers.isEmpty() && body == null) {
+            EmptyTabState(emptyMessage)
         }
     }
 }
@@ -582,7 +583,7 @@ private fun SectionCard(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
-            .background(Color(0xFF1A2235))
+            .background(NetScopeCard)
             .padding(horizontal = 16.dp, vertical = 12.dp),
     ) {
         // Title row with optional copy button
@@ -649,14 +650,14 @@ private fun HeaderTable(headers: List<NetHeader>) {
             Row(modifier = Modifier.fillMaxWidth()) {
                 Text(
                     text = header.name,
-                    color = if (header.isRedacted) Color(0xFFFF4D6A) else NetScopeMuted,
+                    color = if (header.isRedacted) ColorError else NetScopeMuted,
                     fontSize = 11.sp,
                     fontFamily = FontFamily.Monospace,
                     modifier = Modifier.weight(0.4f),
                 )
                 Text(
                     text = header.value,
-                    color = if (header.isRedacted) Color(0xFFFF4D6A).copy(alpha = 0.7f) else Color.White,
+                    color = if (header.isRedacted) ColorError.copy(alpha = 0.7f) else NetScopeOnSurface,
                     fontSize = 11.sp,
                     fontFamily = FontFamily.Monospace,
                     modifier = Modifier.weight(0.6f),
@@ -714,12 +715,13 @@ private val JsonDefaultColor = Color(0xFFCDD6F4)
 
 private fun String.highlightedBody(): AnnotatedString {
     val trimmed = trim()
-    val isJson = trimmed.startsWith("{") || trimmed.startsWith("[")
-    val pretty = if (isJson) trimmed.prettyPrintJson() else trimmed
-    return if (!isJson) {
-        buildAnnotatedString { withStyle(SpanStyle(color = JsonDefaultColor)) { append(pretty) } }
-    } else {
-        buildAnnotatedString { appendJsonHighlighted(pretty) }
+    return when {
+        trimmed.startsWith("{") || trimmed.startsWith("[") ->
+            buildAnnotatedString { appendJsonHighlighted(trimmed.prettyPrintJson()) }
+        trimmed.startsWith("<") ->
+            buildAnnotatedString { appendXmlHighlighted(trimmed) }
+        else ->
+            buildAnnotatedString { withStyle(SpanStyle(color = JsonDefaultColor)) { append(trimmed) } }
     }
 }
 
@@ -759,6 +761,62 @@ private fun AnnotatedString.Builder.appendJsonHighlighted(json: String) {
             json.startsWith("null",  i) -> { withStyle(SpanStyle(color = JsonKeywordColor)) { append("null")  }; i += 4 }
             ch in "{}[],:." -> { withStyle(SpanStyle(color = JsonPunctColor)) { append(ch) }; i++ }
             else -> { withStyle(SpanStyle(color = JsonDefaultColor)) { append(ch) }; i++ }
+        }
+    }
+}
+
+// ── XML syntax highlighting ───────────────────────────────────────────────────
+
+private fun AnnotatedString.Builder.appendXmlHighlighted(xml: String) {
+    var i = 0
+    while (i < xml.length) {
+        when {
+            xml.startsWith("<!--", i) -> {
+                val end = xml.indexOf("-->", i + 4).let { if (it == -1) xml.length else it + 3 }
+                withStyle(SpanStyle(color = JsonPunctColor)) { append(xml.substring(i, end)) }
+                i = end
+            }
+            xml.startsWith("<?", i) -> {
+                val end = xml.indexOf("?>", i + 2).let { if (it == -1) xml.length else it + 2 }
+                withStyle(SpanStyle(color = JsonKeywordColor)) { append(xml.substring(i, end)) }
+                i = end
+            }
+            xml[i] == '<' -> {
+                withStyle(SpanStyle(color = JsonPunctColor)) { append('<') }
+                i++
+                if (i < xml.length && xml[i] == '/') {
+                    withStyle(SpanStyle(color = JsonPunctColor)) { append('/') }
+                    i++
+                }
+                val nameStart = i
+                while (i < xml.length && xml[i] !in " \t\n\r>/") i++
+                withStyle(SpanStyle(color = JsonKeyColor)) { append(xml.substring(nameStart, i)) }
+                while (i < xml.length && xml[i] != '>' && !(xml[i] == '/' && i + 1 < xml.length && xml[i + 1] == '>')) {
+                    if (xml[i].isWhitespace()) { append(xml[i++]) }
+                    else {
+                        val attrStart = i
+                        while (i < xml.length && xml[i] !in "= \t\n\r>/") i++
+                        withStyle(SpanStyle(color = JsonStringColor)) { append(xml.substring(attrStart, i)) }
+                        if (i < xml.length && xml[i] == '=') {
+                            withStyle(SpanStyle(color = JsonPunctColor)) { append('=') }
+                            i++
+                            if (i < xml.length && xml[i] == '"') {
+                                val q = i++
+                                while (i < xml.length && xml[i] != '"') i++
+                                if (i < xml.length) i++
+                                withStyle(SpanStyle(color = JsonNumberColor)) { append(xml.substring(q, i)) }
+                            }
+                        }
+                    }
+                }
+                if (i < xml.length && xml[i] == '/') { withStyle(SpanStyle(color = JsonPunctColor)) { append('/') }; i++ }
+                if (i < xml.length && xml[i] == '>') { withStyle(SpanStyle(color = JsonPunctColor)) { append('>') }; i++ }
+            }
+            else -> {
+                val start = i
+                while (i < xml.length && xml[i] != '<') i++
+                withStyle(SpanStyle(color = JsonDefaultColor)) { append(xml.substring(start, i)) }
+            }
         }
     }
 }
