@@ -21,12 +21,15 @@ val descriptions = mapOf(
 )
 
 subprojects {
-    // Runs only on modules that have vanniktech applied
+    // ── Maven publishing ──────────────────────────────────────────────────────
     plugins.withId("com.vanniktech.maven.publish") {
         val artifactId = project.name
         extensions.configure<MavenPublishBaseExtension> {
             publishToMavenCentral(SonatypeHost.CENTRAL_PORTAL)
-            signAllPublications()  // reads ORG_GRADLE_PROJECT_signingInMemoryKey* on CI
+            // Signing is wired explicitly in afterEvaluate below — do NOT call
+            // signAllPublications() here; it silently skips useInMemoryPgpKeys()
+            // when the property is null yet still registers sign tasks, causing
+            // "has no configured signatory" at execution time.
             coordinates(libGroup, artifactId, libVersion)
             pom {
                 name.set(artifactId)
@@ -56,4 +59,5 @@ subprojects {
             }
         }
     }
+
 }
