@@ -67,6 +67,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import io.netscope.ui.component.ColorError
 import io.netscope.ui.component.NetScopeAccent
 import io.netscope.ui.component.NetScopeBorder
 import io.netscope.ui.component.NetScopeCard
@@ -330,7 +331,7 @@ fun SettingsScreen(
                             .padding(horizontal = 10.dp, vertical = 4.dp),
                     ) {
                         Text(
-                            text = "v0.3.1",
+                            text = "v0.4.0",
                             color = NetScopeAccent,
                             fontSize = 11.sp,
                             fontFamily = FontFamily.Monospace,
@@ -458,16 +459,19 @@ private fun SettingsDivider() {
     )
 }
 
-// ── Theme mode picker ─────────────────────────────────────────────────────────
+// ── Radio option picker (generic) ─────────────────────────────────────────────
 
 @Composable
-private fun ThemeModePicker(
-    selected: ThemeMode,
-    onSelect: (ThemeMode) -> Unit,
+private fun <T> RadioOptionPicker(
+    options: List<T>,
+    selected: T,
+    onSelect: (T) -> Unit,
+    label: (T) -> String,
+    description: (T) -> String,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        ThemeMode.entries.forEach { mode ->
-            val active = mode == selected
+        options.forEach { option ->
+            val active = option == selected
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -478,19 +482,19 @@ private fun ThemeModePicker(
                         if (active) NetScopeAccent.copy(alpha = 0.40f) else NetScopeBorder,
                         RoundedCornerShape(8.dp),
                     )
-                    .clickable { onSelect(mode) }
+                    .clickable { onSelect(option) }
                     .padding(horizontal = 12.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = mode.label,
+                        text = label(option),
                         color = if (active) NetScopeAccent else NetScopeOnSurface,
                         fontSize = 13.sp,
                         fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
                     )
-                    Text(text = mode.description, color = NetScopeMuted, fontSize = 11.sp)
+                    Text(text = description(option), color = NetScopeMuted, fontSize = 11.sp)
                 }
                 if (active) {
                     Icon(Icons.Default.Check, contentDescription = null, tint = NetScopeAccent, modifier = Modifier.size(16.dp))
@@ -500,46 +504,26 @@ private fun ThemeModePicker(
     }
 }
 
-// ── Notification style picker ─────────────────────────────────────────────────
+@Composable
+private fun ThemeModePicker(selected: ThemeMode, onSelect: (ThemeMode) -> Unit) {
+    RadioOptionPicker(
+        options = ThemeMode.entries,
+        selected = selected,
+        onSelect = onSelect,
+        label = { it.label },
+        description = { it.description },
+    )
+}
 
 @Composable
-private fun NotificationStylePicker(
-    selected: NotificationStyle,
-    onSelect: (NotificationStyle) -> Unit,
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        NotificationStyle.entries.forEach { style ->
-            val active = style == selected
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(if (active) NetScopeAccent.copy(alpha = 0.10f) else NetScopeCardAlt)
-                    .border(
-                        0.5.dp,
-                        if (active) NetScopeAccent.copy(alpha = 0.40f) else NetScopeBorder,
-                        RoundedCornerShape(8.dp),
-                    )
-                    .clickable { onSelect(style) }
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = style.label,
-                        color = if (active) NetScopeAccent else NetScopeOnSurface,
-                        fontSize = 13.sp,
-                        fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
-                    )
-                    Text(text = style.description, color = NetScopeMuted, fontSize = 11.sp)
-                }
-                if (active) {
-                    Icon(Icons.Default.Check, contentDescription = null, tint = NetScopeAccent, modifier = Modifier.size(16.dp))
-                }
-            }
-        }
-    }
+private fun NotificationStylePicker(selected: NotificationStyle, onSelect: (NotificationStyle) -> Unit) {
+    RadioOptionPicker(
+        options = NotificationStyle.entries,
+        selected = selected,
+        onSelect = onSelect,
+        label = { it.label },
+        description = { it.description },
+    )
 }
 
 // ── Generic chip row ──────────────────────────────────────────────────────────
@@ -698,6 +682,3 @@ private fun NetScopeSwitch(checked: Boolean, onCheckedChange: (Boolean) -> Unit)
     )
 }
 
-// ── Private helpers ───────────────────────────────────────────────────────────
-
-private val ColorError = io.netscope.ui.component.ColorError

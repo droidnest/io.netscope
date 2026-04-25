@@ -34,7 +34,7 @@
 **`libs.versions.toml`**
 ```toml
 [versions]
-netscope = "0.3.1"
+netscope = "0.4.0"
 
 [libraries]
 netscope-core         = { group = "io.github.nidhal92", name = "netscope-core",         version.ref = "netscope" }
@@ -121,14 +121,15 @@ NetScopeActivity.launch(context)
 - ✅ Sort by time (newest first), duration (slowest first), or size (largest first)
 - ✅ Stats bar — total count · error count · average response time
 - ✅ Animated item transitions and filter chip fade-in/out
+- ✅ **Export all transactions as HAR** — share sheet integration
 
 ### UI — Transaction detail
 - ✅ Four tabs: **Overview** · **Request** · **Response** · **Timing**
 - ✅ Directional slide animation between tabs
 - ✅ JSON and XML syntax highlighting
-- ✅ Horizontal timing bar — DNS / Connect / SSL / TTFB / Download phases
-- ✅ One-tap copy on any field (URL, headers, body, curl command)
-- ✅ Copy all · Share full summary actions
+- ✅ Horizontal timing bar — DNS / Connect / SSL / TTFB phases with legend
+- ✅ One-tap copy on any field (URL, headers, body, cURL command)
+- ✅ Copy all · Share full summary · **Share as HAR** actions
 - ✅ Snackbar confirmation on every copy
 
 ### Settings (all applied instantly at runtime)
@@ -186,6 +187,12 @@ Compose UI                   ← TransactionListScreen / TransactionDetailScreen
 
 ## Changelog
 
+### v0.4.0
+- Dedicated **Timing tab** in transaction detail — timestamps, duration, and full network phase bar (DNS / Connect / TLS / TTFB)
+- **Share as HAR** action added to the detail screen overflow menu (single-transaction HAR)
+- **Export all as HAR** added to the transaction list screen overflow menu (full HTTP Archive of all visible transactions)
+- **XML syntax highlighting** in request and response bodies (tags, attributes, values, comments, declarations)
+
 ### v0.3.0
 - Settings screen — theme picker, all capture/privacy/interface settings, danger zone
 - Light theme (default) + dark theme + system follow — status-bar icons sync correctly
@@ -220,7 +227,6 @@ Compose UI                   ← TransactionListScreen / TransactionDetailScreen
 
 | Version | Planned |
 |---|---|
-| **v0.4.0** | Export as HAR / cURL from the UI, share sheet integration |
 | **v0.5.0** | Mock response rules — intercept and return fixture JSON |
 | **v1.0.0** | Ktor plugin, desktop companion app |
 
