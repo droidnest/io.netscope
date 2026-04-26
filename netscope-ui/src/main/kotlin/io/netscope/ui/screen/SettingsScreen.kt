@@ -331,7 +331,7 @@ fun SettingsScreen(
                             .padding(horizontal = 10.dp, vertical = 4.dp),
                     ) {
                         Text(
-                            text = "v0.4.0",
+                            text = "v0.5.0",
                             color = NetScopeAccent,
                             fontSize = 11.sp,
                             fontFamily = FontFamily.Monospace,
