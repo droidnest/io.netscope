@@ -4,9 +4,14 @@ import android.content.Context
 import io.netscope.data.db.NetScopeDatabase
 import io.netscope.data.repository.TransactionRepositoryImpl
 import io.netscope.domain.repository.TransactionRepository
+import io.netscope.interceptor.NetScopeMockInterceptor
 import io.netscope.interceptor.NetScopeInterceptor
 import io.netscope.interceptor.NetScopeTimingListenerFactory
+import io.netscope.mock.MockRuleStore
+import io.netscope.model.MockRule
 import io.netscope.shake.NetScopeShakeDetector
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 
 /**
  * Main entry point for the NetScope library.
@@ -27,6 +32,20 @@ object NetScope {
 
     lateinit var repository: TransactionRepository
         private set
+
+    // ── Mock rules ────────────────────────────────────────────────────────────
+
+    private var mockRuleStore: MockRuleStore? = null
+    private val _emptyRules = MutableStateFlow<List<MockRule>>(emptyList())
+
+    /** Live list of all configured mock rules. Observe in the UI via a ViewModel. */
+    val mockRules: StateFlow<List<MockRule>>
+        get() = mockRuleStore?.rules ?: _emptyRules
+
+    fun addMockRule(rule: MockRule)      = mockRuleStore?.add(rule)
+    fun updateMockRule(rule: MockRule)   = mockRuleStore?.update(rule)
+    fun deleteMockRule(id: String)       = mockRuleStore?.delete(id)
+    fun toggleMockRule(id: String)       = mockRuleStore?.toggle(id)
 
     // Active config — kept in sync with the running interceptor and repository.
     private lateinit var _config: NetScopeConfig
@@ -84,6 +103,20 @@ object NetScope {
     }
 
     /**
+     * Creates a [NetScopeMockInterceptor] that short-circuits matching requests.
+     * Add it **before** [interceptor] in the OkHttpClient chain so mocked responses
+     * are still recorded in the transaction list.
+     *
+     * **Must be called after [interceptor]** so that the library is initialised.
+     */
+    fun mockInterceptor(): NetScopeMockInterceptor {
+        check(isInitialized()) {
+            "Call NetScope.interceptor(context) before NetScope.mockInterceptor()."
+        }
+        return NetScopeMockInterceptor()
+    }
+
+    /**
      * Returns an [okhttp3.EventListener.Factory] that captures per-phase network
      * timing (DNS / TCP connect / TLS / TTFB) and writes it to the repository.
      *
@@ -124,6 +157,7 @@ object NetScope {
         val db = NetScopeDatabase.getInstance(context)
         _config = config
         repository = TransactionRepositoryImpl(db.transactionDao(), config)
+        if (mockRuleStore == null) mockRuleStore = MockRuleStore(context)
         initialized = true
     }
 

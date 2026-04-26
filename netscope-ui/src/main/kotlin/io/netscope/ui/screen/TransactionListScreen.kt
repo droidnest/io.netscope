@@ -29,6 +29,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Hub
+import androidx.compose.material.icons.outlined.Science
 import androidx.compose.material.icons.outlined.SearchOff
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
@@ -103,6 +104,7 @@ fun TransactionListScreen(
     viewModel: NetScopeViewModel,
     onTransactionClick: (Long) -> Unit,
     onSettingsClick: () -> Unit,
+    onMockRulesClick: () -> Unit,
 ) {
     val transactions by viewModel.transactions.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
@@ -136,6 +138,14 @@ fun TransactionListScreen(
                     }
                 },
                 actions = {
+                    // Mock Rules
+                    IconButton(onClick = onMockRulesClick) {
+                        Icon(
+                            imageVector = Icons.Outlined.Science,
+                            contentDescription = "Mock Rules",
+                            tint = NetScopeMuted,
+                        )
+                    }
                     // Settings
                     IconButton(onClick = onSettingsClick) {
                         Icon(

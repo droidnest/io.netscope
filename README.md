@@ -34,7 +34,7 @@
 **`libs.versions.toml`**
 ```toml
 [versions]
-netscope = "0.4.0"
+netscope = "0.5.0"
 
 [libraries]
 netscope-core         = { group = "io.github.nidhal92", name = "netscope-core",         version.ref = "netscope" }
@@ -187,6 +187,13 @@ Compose UI                   ← TransactionListScreen / TransactionDetailScreen
 
 ## Changelog
 
+### v0.5.0
+- **Mock response rules** — create rules that intercept matching requests and return fixture JSON (or any content type) without hitting the network
+- Rules match by URL pattern (Contains / Exact / Regex), optional HTTP method filter, and can carry a configurable delay
+- Full CRUD UI: list screen with per-rule toggle + delete, editor form for create/edit
+- `NetScopeMockInterceptor` — add before `NetScopeInterceptor` in your OkHttp chain; mocked responses are still recorded in the transaction list
+- Rules persisted across app restarts via SharedPreferences + Gson
+
 ### v0.4.0
 - Dedicated **Timing tab** in transaction detail — timestamps, duration, and full network phase bar (DNS / Connect / TLS / TTFB)
 - **Share as HAR** action added to the detail screen overflow menu (single-transaction HAR)
@@ -227,7 +234,6 @@ Compose UI                   ← TransactionListScreen / TransactionDetailScreen
 
 | Version | Planned |
 |---|---|
-| **v0.5.0** | Mock response rules — intercept and return fixture JSON |
 | **v1.0.0** | Ktor plugin, desktop companion app |
 
 ---
