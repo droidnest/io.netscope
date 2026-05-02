@@ -2,7 +2,7 @@
 
 > **The Proxyman for Android.** On-device HTTP inspector for debug builds — no proxy, no SSL pinning bypass, no certificate install. Plug-and-play with OkHttp.
 
-[![Maven Central](https://img.shields.io/maven-central/v/io.github.nidhal92/netscope-core?label=Maven%20Central&color=0098C8)](https://central.sonatype.com/search?q=io.github.nidhal92)
+[![Maven Central](https://img.shields.io/maven-central/v/io.github.droidnest/netscope-core?label=Maven%20Central&color=0098C8)](https://central.sonatype.com/search?q=io.github.droidnest)
 [![API](https://img.shields.io/badge/minSdk-23-brightgreen)](https://developer.android.com/about/versions/marshmallow)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue)](LICENSE)
 
@@ -37,10 +37,10 @@
 netscope = "0.5.0"
 
 [libraries]
-netscope-core         = { group = "io.github.nidhal92", name = "netscope-core",         version.ref = "netscope" }
-netscope-ui           = { group = "io.github.nidhal92", name = "netscope-ui",           version.ref = "netscope" }
-netscope-notification = { group = "io.github.nidhal92", name = "netscope-notification", version.ref = "netscope" }
-netscope-no-op        = { group = "io.github.nidhal92", name = "netscope-no-op",        version.ref = "netscope" }
+netscope-core         = { group = "io.github.droidnest", name = "netscope-core",         version.ref = "netscope" }
+netscope-ui           = { group = "io.github.droidnest", name = "netscope-ui",           version.ref = "netscope" }
+netscope-notification = { group = "io.github.droidnest", name = "netscope-notification", version.ref = "netscope" }
+netscope-no-op        = { group = "io.github.droidnest", name = "netscope-no-op",        version.ref = "netscope" }
 ```
 
 **`app/build.gradle.kts`**
