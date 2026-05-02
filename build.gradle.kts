@@ -35,7 +35,7 @@ subprojects {
                 name.set(artifactId)
                 description.set(descriptions[artifactId] ?: "NetScope")
                 inceptionYear.set("2024")
-                url.set("https://github.com/droidnest/netscope")
+                url.set("https://github.com/droidnest/io.netscope")
                 licenses {
                     license {
                         name.set("Apache-2.0")
@@ -52,9 +52,9 @@ subprojects {
                     }
                 }
                 scm {
-                    url.set("https://github.com/droidnest/netscope")
-                    connection.set("scm:git:https://github.com/droidnest/netscope.git")
-                    developerConnection.set("scm:git:ssh://git@github.com/droidnest/netscope.git")
+                    url.set("https://github.com/droidnest/io.netscope")
+                    connection.set("scm:git:https://github.com/droidnest/io.netscope.git")
+                    developerConnection.set("scm:git:ssh://git@github.com/droidnest/io.netscope.git")
                 }
             }
         }
