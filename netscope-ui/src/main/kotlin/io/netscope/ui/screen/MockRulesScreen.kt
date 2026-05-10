@@ -8,6 +8,7 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.draw.alpha
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -65,6 +66,7 @@ import io.netscope.ui.component.NetScopeMuted
 import io.netscope.ui.component.NetScopeOnSurface
 import io.netscope.ui.component.NetScopeSurface
 import io.netscope.ui.component.ColorError
+import io.netscope.ui.component.NetScopeText2
 import io.netscope.ui.component.methodColor
 import io.netscope.ui.viewmodel.MockRulesViewModel
 
@@ -92,13 +94,25 @@ fun MockRulesScreen(
                                 .clip(CircleShape)
                                 .background(NetScopeAccent),
                         )
-                        Text(
-                            text = "Mock Rules",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 18.sp,
-                            color = NetScopeOnSurface,
-                            letterSpacing = (-0.3).sp,
-                        )
+                        Column {
+                            Text(
+                                text = "Mock Rules",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 17.sp,
+                                color = NetScopeOnSurface,
+                                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                                letterSpacing = (-0.3).sp,
+                            )
+                            if (rules.isNotEmpty()) {
+                                val activeCount = rules.count { it.isEnabled }
+                                Text(
+                                    text = "${rules.size} RULES · $activeCount ACTIVE",
+                                    color = NetScopeText2,
+                                    fontSize = 9.sp,
+                                    letterSpacing = 0.8.sp,
+                                )
+                            }
+                        }
                         val activeCount = rules.count { it.isEnabled }
                         AnimatedVisibility(
                             visible = activeCount > 0,
@@ -148,7 +162,7 @@ fun MockRulesScreen(
         containerColor = NetScopeDarkBackground,
     ) { innerPadding ->
         if (rules.isEmpty()) {
-            MockRulesEmptyState(modifier = Modifier.padding(innerPadding))
+            MockRulesEmptyState(onAddRule = onAddRule, modifier = Modifier.padding(innerPadding))
         } else {
             LazyColumn(
                 contentPadding = PaddingValues(
@@ -189,6 +203,7 @@ private fun MockRuleItem(
             .height(IntrinsicSize.Min)
             .clip(RoundedCornerShape(10.dp))
             .background(NetScopeCard)
+            .border(0.5.dp, NetScopeBorder, RoundedCornerShape(10.dp))
             .clickable(onClick = onEdit),
     ) {
         // Left accent stripe
@@ -205,6 +220,7 @@ private fun MockRuleItem(
         Column(
             modifier = Modifier
                 .weight(1f)
+                .alpha(if (rule.isEnabled) 1f else 0.5f)
                 .padding(horizontal = 12.dp, vertical = 10.dp),
             verticalArrangement = Arrangement.spacedBy(5.dp),
         ) {
@@ -350,7 +366,7 @@ private fun MethodPill(method: String, enabled: Boolean) {
 // ── Empty state ───────────────────────────────────────────────────────────────
 
 @Composable
-private fun MockRulesEmptyState(modifier: Modifier = Modifier) {
+private fun MockRulesEmptyState(onAddRule: () -> Unit, modifier: Modifier = Modifier) {
     Column(
         modifier = modifier.fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -358,8 +374,8 @@ private fun MockRulesEmptyState(modifier: Modifier = Modifier) {
     ) {
         Box(
             modifier = Modifier
-                .size(80.dp)
-                .clip(RoundedCornerShape(24.dp))
+                .size(72.dp)
+                .clip(RoundedCornerShape(20.dp))
                 .background(NetScopeCard),
             contentAlignment = Alignment.Center,
         ) {
@@ -367,14 +383,14 @@ private fun MockRulesEmptyState(modifier: Modifier = Modifier) {
                 imageVector = Icons.Outlined.Science,
                 contentDescription = null,
                 tint = NetScopeMuted,
-                modifier = Modifier.size(38.dp),
+                modifier = Modifier.size(36.dp),
             )
         }
         Spacer(Modifier.height(20.dp))
         Text(
             text = "No mock rules yet",
             color = NetScopeOnSurface,
-            fontSize = 17.sp,
+            fontSize = 16.sp,
             fontWeight = FontWeight.SemiBold,
         )
         Spacer(Modifier.height(6.dp))
@@ -386,5 +402,22 @@ private fun MockRulesEmptyState(modifier: Modifier = Modifier) {
             lineHeight = 20.sp,
             modifier = Modifier.padding(horizontal = 44.dp),
         )
+        Spacer(Modifier.height(20.dp))
+        // CTA button
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(10.dp))
+                .background(NetScopeAccent.copy(alpha = 0.12f))
+                .border(1.dp, NetScopeAccent.copy(alpha = 0.6f), RoundedCornerShape(10.dp))
+                .clickable(onClick = onAddRule)
+                .padding(horizontal = 20.dp, vertical = 10.dp),
+        ) {
+            Text(
+                text = "+ Add your first rule",
+                color = NetScopeAccent,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
     }
 }
