@@ -183,22 +183,24 @@ fun MockRuleEditorScreen(
                 )
 
                 FieldLabel("MATCH TYPE")
+                val accent = NetScopeAccent
                 SegmentedPicker(
                     options = MockRule.MatchType.values().toList(),
                     selected = matchType,
                     onSelect = { matchType = it },
                     label = { it.label },
-                    chipColor = { NetScopeAccent },
+                    chipColor = { accent },
                 )
 
                 FieldLabel("HTTP METHOD")
+                val muted = NetScopeMuted
                 val methods = listOf(null, "GET", "POST", "PUT", "PATCH", "DELETE")
                 SegmentedPicker(
                     options = methods,
                     selected = method,
                     onSelect = { method = it },
                     label = { it ?: "ANY" },
-                    chipColor = { opt -> opt?.let { it.methodColor() } ?: NetScopeMuted },
+                    chipColor = { opt -> opt?.let { it.methodColor() } ?: muted },
                 )
             }
 
