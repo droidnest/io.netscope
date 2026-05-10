@@ -50,15 +50,15 @@ fun MethodChip(method: String, modifier: Modifier = Modifier) {
     val color = method.methodColor()
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(4.dp))
-            .background(color.copy(alpha = 0.12f))
-            .padding(horizontal = 7.dp, vertical = 2.dp),
+            .clip(RoundedCornerShape(6.dp))
+            .background(color.copy(alpha = 0.15f))
+            .padding(horizontal = 6.dp, vertical = 2.dp),
         contentAlignment = Alignment.Center,
     ) {
         Text(
             text = method,
             color = color,
-            fontSize = 10.sp,
+            fontSize = 9.sp,
             fontWeight = FontWeight.Bold,
             fontFamily = FontFamily.Monospace,
             letterSpacing = 0.5.sp,
@@ -76,9 +76,9 @@ fun StatusBadge(code: Int?, statusClass: NetTransaction.StatusClass, modifier: M
     }
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(4.dp))
-            .background(color.copy(alpha = 0.12f))
-            .padding(horizontal = 7.dp, vertical = 2.dp),
+            .clip(RoundedCornerShape(6.dp))
+            .background(color.copy(alpha = 0.15f))
+            .padding(horizontal = 6.dp, vertical = 2.dp),
         contentAlignment = Alignment.Center,
     ) {
         Text(
@@ -143,7 +143,7 @@ fun TransactionItem(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 10.dp),
+                .padding(horizontal = 11.dp, vertical = 10.dp),
             verticalArrangement = Arrangement.spacedBy(5.dp),
         ) {
             // ── Row 1: method · path · timestamp ─────────────────────────
@@ -155,8 +155,8 @@ fun TransactionItem(
                 MethodChip(method = transaction.method)
                 Text(
                     text = transaction.path + (transaction.query?.let { "?$it" } ?: ""),
-                    color = NetScopeOnCode,
-                    fontSize = 12.sp,
+                    color = NetScopeOnSurface,
+                    fontSize = 11.sp,
                     fontFamily = FontFamily.Monospace,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -165,7 +165,7 @@ fun TransactionItem(
                 Text(
                     text = timeLabel,
                     color = NetScopeMuted,
-                    fontSize = 10.sp,
+                    fontSize = 9.sp,
                     fontFamily = FontFamily.Monospace,
                 )
             }
@@ -179,7 +179,7 @@ fun TransactionItem(
                 Text(
                     text = transaction.host,
                     color = NetScopeMuted,
-                    fontSize = 11.sp,
+                    fontSize = 9.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
@@ -188,8 +188,8 @@ fun TransactionItem(
                 if (transaction.durationMs != null) {
                     Text(
                         text = "${transaction.durationMs}ms",
-                        color = durationColor(transaction.durationMs?:0L),
-                        fontSize = 11.sp,
+                        color = durationColor(transaction.durationMs ?: 0L),
+                        fontSize = 9.sp,
                         fontFamily = FontFamily.Monospace,
                     )
                 }
@@ -197,7 +197,7 @@ fun TransactionItem(
                     Text(
                         text = transaction.totalSize.formatBytes(),
                         color = NetScopeMuted,
-                        fontSize = 11.sp,
+                        fontSize = 9.sp,
                     )
                 }
             }
@@ -235,10 +235,10 @@ fun Long.formatBytes(): String = when {
     else                       -> "${"%.1f".format(this / (1_024.0 * 1_024.0))}MB"
 }
 
-/** Colours duration: green ≤200ms, amber ≤1s, red >1s. */
+/** Colours duration: green ≤300ms, amber ≤1s, red >1s. */
 private fun durationColor(ms: Long): Color = when {
-    ms <= 200  -> ColorSuccess.copy(alpha = 0.85f)
-    ms <= 1000 -> ColorWarning
+    ms <= 300  -> ColorSuccess.copy(alpha = 0.85f)
+    ms <= 1000 -> ColorAmber
     else       -> ColorError
 }
 

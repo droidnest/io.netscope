@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -26,9 +27,17 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.animation.core.EaseInOutSine
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Hub
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.material.icons.outlined.Science
 import androidx.compose.material.icons.outlined.SearchOff
 import androidx.compose.material.icons.filled.Check
@@ -71,6 +80,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.netscope.domain.usecase.SortOrder
 import io.netscope.model.NetTransaction
+import io.netscope.ui.component.ColorAmber
 import io.netscope.ui.component.ColorError
 import io.netscope.ui.component.ColorPending
 import io.netscope.ui.component.NetScopeAccent
@@ -83,6 +93,7 @@ import io.netscope.ui.component.NetScopeOnSurface
 import io.netscope.ui.component.NetScopeSurface
 import io.netscope.ui.component.StatDot
 import io.netscope.ui.component.TransactionItem
+import io.netscope.ui.component.formatBytes
 import io.netscope.ui.component.color
 import io.netscope.ui.component.methodColor
 import io.netscope.ui.viewmodel.FilterState
@@ -117,22 +128,36 @@ fun TransactionListScreen(
         topBar = {
             TopAppBar(
                 title = {
+                    val accent = NetScopeAccent
+                    val onSurface = NetScopeOnSurface
+                    val dotTransition = rememberInfiniteTransition(label = "liveDot")
+                    val dotAlpha by dotTransition.animateFloat(
+                        initialValue = 1f,
+                        targetValue = 0.4f,
+                        animationSpec = infiniteRepeatable(
+                            animation = tween(1400, easing = EaseInOutSine),
+                            repeatMode = RepeatMode.Reverse,
+                        ),
+                        label = "dotAlpha",
+                    )
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
-                        // Logo dot
                         Box(
                             modifier = Modifier
                                 .size(8.dp)
                                 .clip(CircleShape)
-                                .background(NetScopeAccent),
+                                .background(accent.copy(alpha = dotAlpha)),
                         )
                         Text(
-                            text = "NetScope",
+                            text = buildAnnotatedString {
+                                withStyle(SpanStyle(color = accent)) { append("Net") }
+                                withStyle(SpanStyle(color = onSurface)) { append("Scope") }
+                            },
                             fontWeight = FontWeight.Bold,
-                            fontSize = 18.sp,
-                            color = NetScopeOnSurface,
+                            fontSize = 17.sp,
+                            fontFamily = FontFamily.Monospace,
                             letterSpacing = (-0.3).sp,
                         )
                     }
@@ -291,8 +316,8 @@ fun TransactionListScreen(
                 EmptyState(isSearching = searchQuery.isNotBlank() || filterState.isActive)
             } else {
                 LazyColumn(
-                    contentPadding = PaddingValues(start = 16.dp, top = 10.dp, bottom = 24.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 24.dp),
+                    verticalArrangement = Arrangement.spacedBy(5.dp),
                 ) {
                     items(transactions, key = { it.id }) { transaction ->
                         TransactionItem(
@@ -311,7 +336,7 @@ fun TransactionListScreen(
 
 @Composable
 private fun StatsBar(transactions: List<NetTransaction>) {
-    val (errorCount, avgMs, pendingCount) = remember(transactions) {
+    val (errorCount, avgMs, totalBytes) = remember(transactions) {
         val errors = transactions.count {
             it.statusClass in setOf(
                 NetTransaction.StatusClass.CLIENT_ERROR,
@@ -321,34 +346,48 @@ private fun StatsBar(transactions: List<NetTransaction>) {
         }
         val durations = transactions.mapNotNull { it.durationMs }
         val avg = if (durations.isEmpty()) null else durations.average().toLong()
-        val pending = transactions.count { it.statusClass == NetTransaction.StatusClass.PENDING }
-        Triple(errors, avg, pending)
+        val bytes = transactions.sumOf { it.totalSize }
+        Triple(errors, avg, bytes)
     }
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .padding(horizontal = 16.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
+        StatCard(value = "${transactions.size}", label = "REQ", valueColor = NetScopeAccent)
+        StatCard(value = "$errorCount", label = "ERR", valueColor = if (errorCount > 0) ColorError else NetScopeMuted)
+        StatCard(value = avgMs?.let { "${it}ms" } ?: "—", label = "AVG", valueColor = if (avgMs != null && avgMs > 300) ColorAmber else NetScopeMuted)
+        StatCard(value = totalBytes.formatBytes(), label = "TOT", valueColor = NetScopeMuted)
+    }
+}
+
+@Composable
+private fun RowScope.StatCard(value: String, label: String, valueColor: Color) {
+    Column(
+        modifier = Modifier
+            .weight(1f)
+            .clip(RoundedCornerShape(10.dp))
+            .background(NetScopeCard)
+            .border(0.5.dp, NetScopeBorder, RoundedCornerShape(10.dp))
+            .padding(horizontal = 8.dp, vertical = 6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
         Text(
-            text = "${transactions.size} request${if (transactions.size != 1) "s" else ""}",
-            color = NetScopeMuted,
-            fontSize = 11.sp,
+            text = value,
+            color = valueColor,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Bold,
+            fontFamily = FontFamily.Monospace,
         )
-        if (errorCount > 0) {
-            StatDot()
-            Text(text = "$errorCount error${if (errorCount != 1) "s" else ""}", color = ColorError, fontSize = 11.sp)
-        }
-        if (avgMs != null) {
-            StatDot()
-            Text(text = "avg ${avgMs}ms", color = NetScopeMuted, fontSize = 11.sp)
-        }
-        if (pendingCount > 0) {
-            StatDot()
-            Text(text = "$pendingCount pending", color = ColorPending, fontSize = 11.sp)
-        }
+        Text(
+            text = label,
+            color = NetScopeMuted,
+            fontSize = 8.sp,
+            letterSpacing = 1.sp,
+        )
     }
 }
 
@@ -374,7 +413,6 @@ private fun FilterBar(
             FilterChip(
                 label = method,
                 active = active,
-                activeColor = method.methodColor(),
                 onClick = { onMethodToggle(method) },
             )
         }
@@ -393,7 +431,6 @@ private fun FilterBar(
             FilterChip(
                 label = label,
                 active = active,
-                activeColor = classes.first().color(),
                 onClick = { classes.forEach { onStatusToggle(it) } },
             )
         }
@@ -404,12 +441,12 @@ private fun FilterBar(
 private fun FilterChip(
     label: String,
     active: Boolean,
-    activeColor: Color,
     onClick: () -> Unit,
 ) {
-    val bg     = if (active) activeColor.copy(alpha = 0.15f) else NetScopeCard
-    val border = if (active) activeColor.copy(alpha = 0.55f) else NetScopeBorder
-    val text   = if (active) activeColor else NetScopeMuted
+    val accent = NetScopeAccent
+    val bg     = if (active) accent.copy(alpha = 0.15f) else NetScopeCard
+    val border = if (active) accent.copy(alpha = 0.6f)  else NetScopeBorder
+    val text   = if (active) accent                     else NetScopeMuted
 
     Box(
         modifier = Modifier
@@ -473,7 +510,8 @@ private fun SearchBar(
                             Text(
                                 text = "Search URL, headers, body…",
                                 color = NetScopeMuted,
-                                fontSize = 13.sp,
+                                fontSize = 11.sp,
+                                fontFamily = FontFamily.Monospace,
                             )
                         }
                         innerTextField()
