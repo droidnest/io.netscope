@@ -8,12 +8,15 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -80,8 +83,14 @@ import io.netscope.ui.component.NetScopeDarkBackground
 import io.netscope.ui.component.NetScopeDropdown
 import io.netscope.ui.component.NetScopeMuted
 import io.netscope.ui.component.NetScopeOnSurface
+import io.netscope.ui.component.ColorAmber
 import io.netscope.ui.component.ColorError
+import io.netscope.ui.component.ColorPink
+import io.netscope.ui.component.ColorPurple
+import io.netscope.ui.component.ColorSuccess
+import io.netscope.ui.component.NetScopeCardAlt
 import io.netscope.ui.component.NetScopeSurface
+import io.netscope.ui.component.NetScopeText2
 import io.netscope.ui.component.StatusBadge
 import io.netscope.ui.component.color
 import io.netscope.ui.component.formatBytes
@@ -333,7 +342,7 @@ fun TransactionDetailScreen(
                     label = "tabContent",
                 ) { tab ->
                     when (tab) {
-                        0    -> OverviewTab(tx)
+                        0    -> OverviewTab(tx, context, onCopied)
                         1    -> RequestTab(tx, context, onCopied)
                         2    -> ResponseTab(tx, context, onCopied)
                         3    -> TimingTab(tx)
@@ -348,142 +357,357 @@ fun TransactionDetailScreen(
 // ── Tab: Overview ─────────────────────────────────────────────────────────────
 
 @Composable
-private fun OverviewTab(tx: NetTransaction) {
+private fun OverviewTab(
+    tx: NetTransaction,
+    context: android.content.Context,
+    onCopied: (String) -> Unit,
+) {
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+            .padding(vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(0.dp),
     ) {
-        SectionCard(title = "Request") {
-            InfoRow("Method", tx.method)
-            InfoRow("URL", tx.url)
+        // Request dcard
+        SectionCard(title = "Request", modifier = Modifier.padding(horizontal = 12.dp)) {
+            InfoRow("Method",    tx.method)
+            InfoRow("URL",       tx.url, valueColor = NetScopeAccent, smallValue = true)
             InfoRow("Body size", tx.requestBodySize.formatBytes())
-            tx.requestContentType?.let { InfoRow("Content-Type", it) }
+            tx.requestContentType?.let { InfoRow("Content-Type", it, smallValue = true) }
         }
 
-        SectionCard(title = "Response") {
-            tx.responseCode?.let { InfoRow("Status", "$it ${tx.responseMessage ?: ""}") }
-            InfoRow("Body size", tx.responseBodySize.formatBytes())
-            tx.responseContentType?.let { InfoRow("Content-Type", it) }
+        Spacer(Modifier.height(8.dp))
+
+        // Response dcard
+        SectionCard(title = "Response", modifier = Modifier.padding(horizontal = 12.dp)) {
+            tx.responseCode?.let {
+                InfoRow("Status", "$it ${tx.responseMessage ?: ""}",
+                    valueColor = tx.statusClass.color())
+            }
+            InfoRow("Body size",  tx.responseBodySize.formatBytes())
+            tx.responseContentType?.let { InfoRow("Content-Type", it, smallValue = true) }
         }
 
-        tx.error?.let {
-            SectionCard(title = "Error") {
+        Spacer(Modifier.height(8.dp))
+
+        // Mini stat cards: Duration · Size · Protocol
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            MiniStatCard(
+                value = tx.durationMs?.let { "${it}ms" } ?: "—",
+                label = "Duration",
+                valueColor = when {
+                    tx.durationMs == null     -> NetScopeMuted
+                    tx.durationMs!! <= 300L   -> ColorSuccess
+                    tx.durationMs!! <= 1000L  -> ColorAmber
+                    else                      -> ColorError
+                },
+                modifier = Modifier.weight(1f),
+            )
+            MiniStatCard(
+                value      = tx.totalSize.formatBytes(),
+                label      = "Size",
+                valueColor = NetScopeAccent,
+                modifier   = Modifier.weight(1f),
+            )
+            MiniStatCard(
+                value      = if (tx.url.startsWith("https")) "HTTPS" else "HTTP",
+                label      = "Protocol",
+                valueColor = ColorPurple,
+                modifier   = Modifier.weight(1f),
+            )
+        }
+
+        Spacer(Modifier.height(8.dp))
+
+        // Copy as cURL action row
+        Box(
+            modifier = Modifier
+                .padding(horizontal = 12.dp)
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(10.dp))
+                .background(NetScopeAccent.copy(alpha = 0.08f))
+                .border(0.5.dp, NetScopeAccent.copy(alpha = 0.25f), RoundedCornerShape(10.dp))
+                .clickable {
+                    NetScopeExporter.copyToClipboard(
+                        context = context,
+                        text    = NetScopeExporter.toCurl(tx),
+                        label   = "cURL command",
+                    )
+                    onCopied("cURL command")
+                }
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+        ) {
+            Row(
+                modifier             = Modifier.fillMaxWidth(),
+                verticalAlignment    = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
                 Text(
-                    text = it,
-                    color = ColorError,
-                    fontSize = 12.sp,
-                    fontFamily = FontFamily.Monospace,
+                    text       = "Copy as cURL",
+                    color      = NetScopeAccent,
+                    fontSize   = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Icon(
+                    imageVector        = Icons.Default.ContentCopy,
+                    contentDescription = null,
+                    tint               = NetScopeAccent,
+                    modifier           = Modifier.size(14.dp),
                 )
             }
         }
+
+        // Error card
+        tx.error?.let { err ->
+            Spacer(Modifier.height(8.dp))
+            SectionCard(title = "Error", modifier = Modifier.padding(horizontal = 12.dp)) {
+                Text(
+                    text       = err,
+                    color      = ColorError,
+                    fontSize   = 12.sp,
+                    fontFamily = FontFamily.Monospace,
+                    lineHeight = 18.sp,
+                    modifier   = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                )
+            }
+        }
+
+        Spacer(Modifier.height(10.dp))
+    }
+}
+
+@Composable
+private fun MiniStatCard(
+    value: String,
+    label: String,
+    valueColor: Color,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(10.dp))
+            .background(NetScopeCard)
+            .border(0.5.dp, NetScopeBorder, RoundedCornerShape(10.dp))
+            .padding(10.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            text       = value,
+            color      = valueColor,
+            fontSize   = 14.sp,
+            fontWeight = FontWeight.Bold,
+            fontFamily = FontFamily.Monospace,
+        )
+        Spacer(Modifier.height(3.dp))
+        Text(
+            text       = label,
+            color      = NetScopeMuted,
+            fontSize   = 8.sp,
+            fontFamily = FontFamily.SansSerif,
+        )
     }
 }
 
 // ── Tab: Timing ───────────────────────────────────────────────────────────────
 
+private data class PhaseSegment(val label: String, val durationMs: Long, val color: Color)
+
+private val PhaseDns      = ColorPurple
+private val PhaseConnect  = Color(0xFF00C8F0)  // Cyan
+private val PhaseSsl      = ColorPink
+private val PhaseTtfb     = ColorAmber
+private val PhaseDownload = ColorSuccess
+
 @Composable
 private fun TimingTab(tx: NetTransaction) {
     val dateFormat = remember { SimpleDateFormat("HH:mm:ss.SSS", Locale.getDefault()) }
+    val segments = remember(tx.dnsMs, tx.connectMs, tx.sslMs, tx.ttfbMs) {
+        buildList {
+            tx.dnsMs?.let     { add(PhaseSegment("DNS lookup",    it, PhaseDns))      }
+            tx.connectMs?.let { add(PhaseSegment("TCP connect",   it, PhaseConnect))  }
+            tx.sslMs?.let     { add(PhaseSegment("TLS handshake", it, PhaseSsl))      }
+            tx.ttfbMs?.let    { add(PhaseSegment("TTFB",          it, PhaseTtfb))     }
+        }
+    }
+    val total = remember(segments) { segments.sumOf { it.durationMs }.coerceAtLeast(1L) }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(16.dp),
+            .padding(vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        SectionCard(title = "Timing") {
-            InfoRow("Started", dateFormat.format(Date(tx.requestDate)))
-            tx.responseDate?.let { InfoRow("Completed", dateFormat.format(Date(it))) }
-            tx.durationMs?.let { InfoRow("Duration", "${it}ms") }
-        }
-
-        val hasPhaseData = tx.dnsMs != null || tx.connectMs != null ||
-                tx.sslMs != null || tx.ttfbMs != null
-        if (hasPhaseData) {
-            SectionCard(title = "Network Phases") {
-                TimingTimeline(tx)
+        // ── Summary card ─────────────────────────────────────────────────────
+        SectionCard(title = "Summary", modifier = Modifier.padding(horizontal = 12.dp)) {
+            Row(
+                modifier              = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text       = dateFormat.format(Date(tx.requestDate)),
+                        color      = NetScopeText2,
+                        fontSize   = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace,
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(text = "Started", color = NetScopeMuted, fontSize = 8.sp,
+                        fontFamily = FontFamily.SansSerif)
+                }
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text       = tx.responseDate?.let { dateFormat.format(Date(it)) } ?: "—",
+                        color      = NetScopeText2,
+                        fontSize   = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace,
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(text = "Completed", color = NetScopeMuted, fontSize = 8.sp,
+                        fontFamily = FontFamily.SansSerif)
+                }
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text       = tx.durationMs?.let { "${it}ms" } ?: "—",
+                        color      = if (tx.durationMs != null) ColorSuccess else NetScopeMuted,
+                        fontSize   = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace,
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(text = "Total", color = NetScopeMuted, fontSize = 8.sp,
+                        fontFamily = FontFamily.SansSerif)
+                }
             }
         }
-    }
-}
 
-// ── Network phase timeline ────────────────────────────────────────────────────
+        // ── Network phases card ──────────────────────────────────────────────
+        if (segments.isNotEmpty()) {
+            SectionCard(title = "Network phases", modifier = Modifier.padding(horizontal = 12.dp)) {
+                Column(
+                    modifier              = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalArrangement   = Arrangement.spacedBy(7.dp),
+                ) {
+                    segments.forEach { seg ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            // Colored dot
+                            Box(
+                                modifier = Modifier
+                                    .size(7.dp)
+                                    .clip(CircleShape)
+                                    .background(seg.color),
+                            )
+                            // Phase name
+                            Text(
+                                text     = seg.label,
+                                color    = NetScopeText2,
+                                fontSize = 9.sp,
+                                fontFamily = FontFamily.SansSerif,
+                                modifier = Modifier.width(90.dp),
+                            )
+                            // Track bar
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(8.dp)
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(NetScopeCardAlt),
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxHeight()
+                                        .fillMaxWidth(seg.durationMs.toFloat() / total)
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(seg.color),
+                                )
+                            }
+                            // Ms value
+                            Text(
+                                text       = "${seg.durationMs}ms",
+                                color      = NetScopeOnSurface,
+                                fontSize   = 9.sp,
+                                fontFamily = FontFamily.SansSerif,
+                                modifier   = Modifier.width(36.dp),
+                            )
+                        }
+                    }
+                }
+            }
 
-private data class PhaseSegment(
-    val label: String,
-    val durationMs: Long,
-    val color: Color,
-)
-
-private val PhaseDns     = Color(0xFF7DD3FC) // sky-300
-private val PhaseConnect = Color(0xFF86EFAC) // green-300
-private val PhaseSsl     = Color(0xFFA78BFA) // violet-400
-private val PhaseTtfb    = Color(0xFFFBBF24) // amber-400
-
-@Composable
-private fun TimingTimeline(tx: NetTransaction) {
-    val segments = remember(tx.dnsMs, tx.connectMs, tx.sslMs, tx.ttfbMs) {
-        buildList {
-            tx.dnsMs?.let     { add(PhaseSegment("DNS",     it, PhaseDns))     }
-            tx.connectMs?.let { add(PhaseSegment("Connect", it, PhaseConnect)) }
-            tx.sslMs?.let     { add(PhaseSegment("TLS",     it, PhaseSsl))     }
-            tx.ttfbMs?.let    { add(PhaseSegment("TTFB",    it, PhaseTtfb))    }
+            // ── Stacked timeline bar ──────────────────────────────────────────
+            Column(
+                modifier = Modifier.padding(horizontal = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(
+                    text     = "Timeline (${total}ms total)",
+                    color    = NetScopeMuted,
+                    fontSize = 9.sp,
+                    fontFamily = FontFamily.SansSerif,
+                )
+                // Stacked bar
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(14.dp)
+                        .clip(RoundedCornerShape(7.dp)),
+                    horizontalArrangement = Arrangement.spacedBy(1.dp),
+                ) {
+                    segments.forEachIndexed { i, seg ->
+                        val shape = when {
+                            segments.size == 1 -> RoundedCornerShape(7.dp)
+                            i == 0             -> RoundedCornerShape(topStart = 7.dp, bottomStart = 7.dp)
+                            i == segments.size - 1 -> RoundedCornerShape(topEnd = 7.dp, bottomEnd = 7.dp)
+                            else               -> RoundedCornerShape(0.dp)
+                        }
+                        Box(
+                            modifier = Modifier
+                                .weight(seg.durationMs.toFloat() / total)
+                                .fillMaxHeight()
+                                .clip(shape)
+                                .background(seg.color),
+                        )
+                    }
+                }
+                // Legend
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    segments.forEach { seg ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(6.dp)
+                                    .clip(RoundedCornerShape(2.dp))
+                                    .background(seg.color),
+                            )
+                            Text(
+                                text     = seg.label.substringBefore(" "),
+                                color    = NetScopeMuted,
+                                fontSize = 8.sp,
+                                fontFamily = FontFamily.SansSerif,
+                            )
+                        }
+                    }
+                }
+            }
         }
-    }
-    if (segments.isEmpty()) return
 
-    val total = remember(segments) { segments.sumOf { it.durationMs }.coerceAtLeast(1L) }
-
-    // Proportional bar
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(10.dp)
-            .clip(RoundedCornerShape(5.dp)),
-    ) {
-        segments.forEach { seg ->
-            Box(
-                modifier = Modifier
-                    .weight(seg.durationMs.toFloat() / total)
-                    .fillMaxSize()
-                    .background(seg.color),
-            )
-        }
-    }
-
-    Spacer(Modifier.height(10.dp))
-
-    // Legend
-    segments.forEach { seg ->
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 2.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(8.dp)
-                    .clip(CircleShape)
-                    .background(seg.color),
-            )
-            Spacer(Modifier.width(8.dp))
-            Text(
-                text = seg.label,
-                color = NetScopeMuted,
-                fontSize = 11.sp,
-                modifier = Modifier.weight(1f),
-            )
-            Text(
-                text = "${seg.durationMs}ms",
-                color = NetScopeOnSurface,
-                fontSize = 11.sp,
-                fontFamily = FontFamily.Monospace,
-            )
-        }
+        Spacer(Modifier.height(10.dp))
     }
 }
 
@@ -534,34 +758,38 @@ private fun HttpMessageTab(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(16.dp),
+            .padding(vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         if (headers.isNotEmpty()) {
             SectionCard(
-                title = "Headers (${headers.size})",
-                onCopy = {
+                title    = "Headers (${headers.size})",
+                onCopy   = {
                     NetScopeExporter.copyToClipboard(context, NetScopeExporter.headersText(headers), headersLabel)
                     onCopied(headersLabel)
                 },
+                modifier = Modifier.padding(horizontal = 12.dp),
             ) {
                 HeaderTable(headers)
             }
         }
         body?.let { b ->
             SectionCard(
-                title = "Body",
-                onCopy = {
+                title    = "Body",
+                onCopy   = {
                     NetScopeExporter.copyToClipboard(context, b, bodyLabel)
                     onCopied(bodyLabel)
                 },
+                modifier = Modifier.padding(horizontal = 12.dp),
             ) {
-                BodyView(b)
+                // empty header only — body rendered separately as json-block
             }
+            BodyView(b, modifier = Modifier.padding(horizontal = 12.dp))
         }
         if (headers.isEmpty() && body == null) {
             EmptyTabState(emptyMessage)
         }
+        Spacer(Modifier.height(10.dp))
     }
 }
 
@@ -577,113 +805,140 @@ private fun HttpMessageTab(
 private fun SectionCard(
     title: String,
     onCopy: (() -> Unit)? = null,
+    modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
     Column(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
             .background(NetScopeCard)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .border(0.5.dp, NetScopeBorder, RoundedCornerShape(10.dp)),
     ) {
-        // Title row with optional copy button
+        // dcard header
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = 10.dp),
+                .background(NetScopeCard)
+                .padding(horizontal = 12.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                text = title,
-                color = NetScopeAccent,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.SemiBold,
-                letterSpacing = 0.8.sp,
+                text       = title,
+                color      = NetScopeAccent,
+                fontSize   = 10.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.SansSerif,
             )
             if (onCopy != null) {
                 IconButton(
-                    onClick = onCopy,
+                    onClick  = onCopy,
                     modifier = Modifier.size(20.dp),
                 ) {
                     Icon(
-                        imageVector = Icons.Default.ContentCopy,
+                        imageVector        = Icons.Default.ContentCopy,
                         contentDescription = "Copy $title",
-                        tint = NetScopeMuted,
-                        modifier = Modifier.size(14.dp),
+                        tint               = NetScopeMuted,
+                        modifier           = Modifier.size(13.dp),
                     )
                 }
             }
         }
+        androidx.compose.material3.HorizontalDivider(color = NetScopeBorder, thickness = 0.5.dp)
+        // Content
         content()
     }
 }
 
 @Composable
-private fun InfoRow(label: String, value: String) {
+private fun InfoRow(
+    label: String,
+    value: String,
+    valueColor: Color = NetScopeOnSurface,
+    smallValue: Boolean = false,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp),
+            .padding(horizontal = 12.dp, vertical = 6.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.Top,
     ) {
         Text(
-            text = label,
-            color = NetScopeMuted,
-            fontSize = 12.sp,
-            modifier = Modifier.weight(0.35f),
+            text       = label,
+            color      = NetScopeText2,
+            fontSize   = 10.sp,
+            fontFamily = FontFamily.SansSerif,
+            modifier   = Modifier.weight(0.35f),
         )
         Text(
-            text = value,
-            color = NetScopeOnSurface,
-            fontSize = 12.sp,
+            text       = value,
+            color      = valueColor,
+            fontSize   = if (smallValue) 9.sp else 10.sp,
             fontFamily = FontFamily.Monospace,
-            modifier = Modifier.weight(0.65f),
+            modifier   = Modifier.weight(0.65f),
         )
     }
+    androidx.compose.material3.HorizontalDivider(
+        color     = NetScopeBorder.copy(alpha = 0.6f),
+        thickness = 0.5.dp,
+        modifier  = Modifier.padding(horizontal = 0.dp),
+    )
 }
 
 @Composable
 private fun HeaderTable(headers: List<NetHeader>) {
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column {
         headers.forEach { header ->
-            Row(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top,
+            ) {
                 Text(
-                    text = header.name,
-                    color = if (header.isRedacted) ColorError else NetScopeMuted,
-                    fontSize = 11.sp,
-                    fontFamily = FontFamily.Monospace,
-                    modifier = Modifier.weight(0.4f),
+                    text       = header.name,
+                    color      = if (header.isRedacted) ColorError else NetScopeText2,
+                    fontSize   = 10.sp,
+                    fontFamily = FontFamily.SansSerif,
+                    modifier   = Modifier.weight(0.4f),
                 )
                 Text(
-                    text = header.value,
-                    color = if (header.isRedacted) ColorError.copy(alpha = 0.7f) else NetScopeOnSurface,
-                    fontSize = 11.sp,
+                    text       = header.value,
+                    color      = if (header.isRedacted) ColorError.copy(alpha = 0.7f) else NetScopeOnSurface,
+                    fontSize   = 10.sp,
                     fontFamily = FontFamily.Monospace,
-                    modifier = Modifier.weight(0.6f),
+                    modifier   = Modifier.weight(0.6f),
                 )
             }
+            androidx.compose.material3.HorizontalDivider(
+                color     = NetScopeBorder.copy(alpha = 0.6f),
+                thickness = 0.5.dp,
+            )
         }
     }
 }
 
 @Composable
-private fun BodyView(body: String) {
+private fun BodyView(body: String, modifier: Modifier = Modifier) {
     val highlighted = remember(body) { body.highlightedBody() }
     val scrollState = rememberScrollState()
     Box(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(NetScopeCode)
+            .clip(RoundedCornerShape(12.dp))
+            .border(0.5.dp, NetScopeBorder, RoundedCornerShape(12.dp))
+            .background(NetScopeCardAlt)
             .horizontalScroll(scrollState)
             .padding(12.dp),
     ) {
         Text(
-            text = highlighted,
-            fontSize = 11.sp,
+            text       = highlighted,
+            fontSize   = 10.sp,
             fontFamily = FontFamily.Monospace,
-            lineHeight = 18.sp,
+            lineHeight  = 17.5.sp,
         )
     }
 }

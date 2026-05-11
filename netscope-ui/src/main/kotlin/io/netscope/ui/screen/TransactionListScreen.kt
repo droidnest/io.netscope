@@ -38,7 +38,6 @@ import androidx.compose.material.icons.outlined.Hub
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
-import androidx.compose.material.icons.outlined.Science
 import androidx.compose.material.icons.outlined.SearchOff
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
@@ -46,7 +45,6 @@ import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.FilterListOff
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Sort
 import androidx.compose.ui.platform.LocalContext
@@ -83,6 +81,8 @@ import io.netscope.model.NetTransaction
 import io.netscope.ui.component.ColorAmber
 import io.netscope.ui.component.ColorError
 import io.netscope.ui.component.ColorPending
+import io.netscope.ui.component.ColorPurple
+import io.netscope.ui.component.ColorSuccess
 import io.netscope.ui.component.NetScopeAccent
 import io.netscope.ui.component.NetScopeBorder
 import io.netscope.ui.component.NetScopeCard
@@ -91,7 +91,6 @@ import io.netscope.ui.component.NetScopeDropdown
 import io.netscope.ui.component.NetScopeMuted
 import io.netscope.ui.component.NetScopeOnSurface
 import io.netscope.ui.component.NetScopeSurface
-import io.netscope.ui.component.StatDot
 import io.netscope.ui.component.TransactionItem
 import io.netscope.ui.component.formatBytes
 import io.netscope.ui.component.color
@@ -114,8 +113,6 @@ private val METHOD_CHIPS = listOf("GET", "POST", "PUT", "PATCH", "DELETE")
 fun TransactionListScreen(
     viewModel: NetScopeViewModel,
     onTransactionClick: (Long) -> Unit,
-    onSettingsClick: () -> Unit,
-    onMockRulesClick: () -> Unit,
 ) {
     val transactions by viewModel.transactions.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
@@ -163,22 +160,6 @@ fun TransactionListScreen(
                     }
                 },
                 actions = {
-                    // Mock Rules
-                    IconButton(onClick = onMockRulesClick) {
-                        Icon(
-                            imageVector = Icons.Outlined.Science,
-                            contentDescription = "Mock Rules",
-                            tint = NetScopeMuted,
-                        )
-                    }
-                    // Settings
-                    IconButton(onClick = onSettingsClick) {
-                        Icon(
-                            imageVector = Icons.Default.Settings,
-                            contentDescription = "Settings",
-                            tint = NetScopeMuted,
-                        )
-                    }
                     // Clear filters — only when active
                     AnimatedVisibility(
                         visible = filterState.isActive || searchQuery.isNotBlank(),
@@ -356,10 +337,10 @@ private fun StatsBar(transactions: List<NetTransaction>) {
             .padding(horizontal = 16.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        StatCard(value = "${transactions.size}", label = "REQ", valueColor = NetScopeAccent)
-        StatCard(value = "$errorCount", label = "ERR", valueColor = if (errorCount > 0) ColorError else NetScopeMuted)
-        StatCard(value = avgMs?.let { "${it}ms" } ?: "—", label = "AVG", valueColor = if (avgMs != null && avgMs > 300) ColorAmber else NetScopeMuted)
-        StatCard(value = totalBytes.formatBytes(), label = "TOT", valueColor = NetScopeMuted)
+        StatCard(value = "${transactions.size}", label = "REQUESTS", valueColor = NetScopeAccent)
+        StatCard(value = "$errorCount", label = "ERRORS", valueColor = if (errorCount > 0) ColorAmber else NetScopeMuted)
+        StatCard(value = avgMs?.let { "${it}ms" } ?: "—", label = "AVG TIME", valueColor = if (avgMs != null) ColorSuccess else NetScopeMuted)
+        StatCard(value = totalBytes.formatBytes(), label = "TOTAL", valueColor = ColorPurple)
     }
 }
 
