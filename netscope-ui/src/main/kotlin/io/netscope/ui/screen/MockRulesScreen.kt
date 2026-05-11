@@ -166,16 +166,27 @@ fun MockRulesScreen(
         } else {
             LazyColumn(
                 contentPadding = PaddingValues(
-                    start = 16.dp, end = 16.dp, top = 12.dp, bottom = 88.dp,
+                    start = 12.dp, end = 12.dp, top = 0.dp, bottom = 88.dp,
                 ),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
                 modifier = Modifier.padding(innerPadding),
             ) {
+                item {
+                    val activeCount = rules.count { it.isEnabled }
+                    Text(
+                        text          = "${rules.size} rules · $activeCount active",
+                        color         = NetScopeMuted,
+                        fontSize      = 8.sp,
+                        fontFamily    = androidx.compose.ui.text.font.FontFamily.SansSerif,
+                        letterSpacing = 1.8.sp,
+                        modifier      = Modifier.padding(start = 2.dp, top = 10.dp, bottom = 6.dp),
+                    )
+                }
                 items(rules, key = { it.id }) { rule ->
                     MockRuleItem(
-                        rule = rule,
+                        rule     = rule,
                         onToggle = { viewModel.toggle(rule.id) },
-                        onEdit = { onEditRule(rule.id) },
+                        onEdit   = { onEditRule(rule.id) },
                         onDelete = { viewModel.delete(rule.id) },
                         modifier = Modifier.animateItem(),
                     )
@@ -222,64 +233,54 @@ private fun MockRuleItem(
                 .weight(1f)
                 .alpha(if (rule.isEnabled) 1f else 0.5f)
                 .padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(5.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            // Row 1: name + status code badge
+            // Row 1: method badge + status code badge
             Row(
-                modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                Text(
-                    text = rule.name,
-                    color = if (rule.isEnabled) NetScopeOnSurface else NetScopeMuted,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
-                )
+                rule.method?.let { method -> MethodPill(method, rule.isEnabled) }
                 StatusCodeBadge(rule.statusCode, rule.isEnabled)
             }
-            // Row 2: match type + URL pattern
+            // Row 2: rule name
+            Text(
+                text     = rule.name,
+                color    = if (rule.isEnabled) NetScopeOnSurface else NetScopeMuted,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            // Row 3: match type + URL pattern
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 Text(
-                    text = rule.matchType.label,
-                    color = NetScopeAccent.copy(alpha = if (rule.isEnabled) 0.7f else 0.35f),
-                    fontSize = 10.sp,
+                    text     = rule.matchType.label,
+                    color    = NetScopeAccent.copy(alpha = if (rule.isEnabled) 0.6f else 0.3f),
+                    fontSize = 9.sp,
                     fontFamily = FontFamily.Monospace,
                     fontWeight = FontWeight.SemiBold,
                 )
                 Text(
-                    text = rule.urlPattern,
-                    color = NetScopeMuted.copy(alpha = if (rule.isEnabled) 1f else 0.5f),
-                    fontSize = 11.sp,
+                    text     = rule.urlPattern,
+                    color    = NetScopeMuted.copy(alpha = if (rule.isEnabled) 1f else 0.5f),
+                    fontSize = 9.sp,
                     fontFamily = FontFamily.Monospace,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            // Row 3: method chip + delay (optional)
-            if (rule.method != null || rule.delayMs > 0) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    rule.method?.let { method ->
-                        MethodPill(method, rule.isEnabled)
-                    }
-                    if (rule.delayMs > 0) {
-                        Text(
-                            text = "${rule.delayMs}ms delay",
-                            color = NetScopeMuted.copy(alpha = if (rule.isEnabled) 0.75f else 0.4f),
-                            fontSize = 10.sp,
-                            fontFamily = FontFamily.Monospace,
-                        )
-                    }
-                }
+            // Row 4: delay (optional)
+            if (rule.delayMs > 0) {
+                Text(
+                    text     = "${rule.delayMs}ms delay",
+                    color    = NetScopeMuted.copy(alpha = if (rule.isEnabled) 0.75f else 0.4f),
+                    fontSize = 9.sp,
+                    fontFamily = FontFamily.Monospace,
+                )
             }
         }
 

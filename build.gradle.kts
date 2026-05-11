@@ -45,9 +45,8 @@ subprojects {
                 }
                 developers {
                     developer {
-                        id.set("nidhal92")
-                        name.set("Nidhal Belhaj Salem")
-                        email.set("nidhal.belhadjsalem@gmail.com")
+                        id.set("droidnest")
+                        name.set("droidnest")
                         url.set("https://github.com/droidnest")
                     }
                 }

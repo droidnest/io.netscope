@@ -2,7 +2,7 @@
 
 > **The Proxyman for Android.** On-device HTTP inspector for debug builds — no proxy, no SSL pinning bypass, no certificate install. Plug-and-play with OkHttp.
 
-[![Maven Central](https://img.shields.io/maven-central/v/io.github.droidnest/netscope-core?label=Maven%20Central&color=0098C8)](https://central.sonatype.com/search?q=io.github.droidnest)
+[![Maven Central](https://img.shields.io/maven-central/v/io.github.droidnest/netscope-core?label=Maven%20Central&color=00C8F0)](https://central.sonatype.com/search?q=io.github.droidnest)
 [![API](https://img.shields.io/badge/minSdk-23-brightgreen)](https://developer.android.com/about/versions/marshmallow)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue)](LICENSE)
 
@@ -34,7 +34,7 @@
 **`libs.versions.toml`**
 ```toml
 [versions]
-netscope = "0.5.0"
+netscope = "0.6.0"
 
 [libraries]
 netscope-core         = { group = "io.github.droidnest", name = "netscope-core",         version.ref = "netscope" }
@@ -107,6 +107,18 @@ NetScopeActivity.launch(context)
 
 ## Features
 
+### Navigation
+- ✅ **Bottom navigation bar** — Requests · Mock · Stats · Settings; slides in/out per route
+
+### Analytics (Stats tab)
+- ✅ Summary row — total, success %, error count, avg duration
+- ✅ p50 / p95 / avg latency with adaptive color coding
+- ✅ Status class stacked bar + per-class breakdown table (2xx / 3xx / 4xx / 5xx / Error)
+- ✅ HTTP method distribution — proportional bars, count, percentage
+- ✅ Response time histogram — < 100ms / 100–300ms / 300ms–1s / > 1s buckets
+- ✅ Top 5 slowest requests — tappable, ranked with duration badge
+- ✅ Top 5 hosts by request count with mini inline bar
+
 ### Capture
 - ✅ Every OkHttp request and response — method, URL, headers, body, status code
 - ✅ Gzip-encoded responses decoded automatically
@@ -119,15 +131,16 @@ NetScopeActivity.launch(context)
 - ✅ Full-text search across URL, headers, and body
 - ✅ Filter chips — by HTTP method (GET / POST / PUT / PATCH / DELETE) and status class (2xx / 3xx / 4xx / 5xx / ERR)
 - ✅ Sort by time (newest first), duration (slowest first), or size (largest first)
-- ✅ Stats bar — total count · error count · average response time
+- ✅ Stats bar — total (cyan) · errors (amber) · avg time (green) · size (purple)
 - ✅ Animated item transitions and filter chip fade-in/out
 - ✅ **Export all transactions as HAR** — share sheet integration
 
 ### UI — Transaction detail
 - ✅ Four tabs: **Overview** · **Request** · **Response** · **Timing**
+- ✅ Overview: request/response dcard sections + 3 mini stat cards (Duration · Size · Protocol) + Copy as cURL row
+- ✅ Timing: Summary card (Started · Completed · Total) + phase bars (DNS=purple, TCP=cyan, TLS=pink, TTFB=amber) + stacked timeline bar + legend
 - ✅ Directional slide animation between tabs
 - ✅ JSON and XML syntax highlighting
-- ✅ Horizontal timing bar — DNS / Connect / SSL / TTFB phases with legend
 - ✅ One-tap copy on any field (URL, headers, body, cURL command)
 - ✅ Copy all · Share full summary · **Share as HAR** actions
 - ✅ Snackbar confirmation on every copy
@@ -187,6 +200,12 @@ Compose UI                   ← TransactionListScreen / TransactionDetailScreen
 
 ## Changelog
 
+### v0.6.0
+- **Analytics screen** (Stats tab) — p50/p95/avg latency, status class distribution bar, HTTP method breakdown, response time histogram, top-5 slowest requests (tappable), top-5 hosts
+- **Bottom navigation bar** — persistent 4-tab bar (Requests · Mock · Stats · Settings) replaces icon buttons in the top bar; animates in/out for overlay routes (detail, editor)
+- **Transaction detail redesign** — Overview tab gains 3 mini stat cards + inline "Copy as cURL" row; Timing tab gains Summary card + colored phase dots + stacked timeline bar + legend
+- **Design system refresh** — updated stat card colors (errors=amber, avg=green, size=purple), dcard-style headers with dividers in detail tabs
+
 ### v0.5.0
 - **Mock response rules** — create rules that intercept matching requests and return fixture JSON (or any content type) without hitting the network
 - Rules match by URL pattern (Contains / Exact / Regex), optional HTTP method filter, and can carry a configurable delay
@@ -234,6 +253,7 @@ Compose UI                   ← TransactionListScreen / TransactionDetailScreen
 
 | Version | Planned |
 |---|---|
+| **v0.7.0** | Network graph, export to Postman collection |
 | **v1.0.0** | Ktor plugin, desktop companion app |
 
 ---
@@ -253,7 +273,7 @@ Compose UI                   ← TransactionListScreen / TransactionDetailScreen
 ## License
 
 ```
-Copyright 2024 Nidhal Belhaj Salem
+Copyright 2024 droidnest (https://github.com/droidnest)
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
