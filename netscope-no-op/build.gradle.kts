@@ -12,8 +12,6 @@ signing {
     sign(publishing.publications)
 }
 
-
-
 android {
     namespace = "io.netscope.noop"
     compileSdk = 35
@@ -31,4 +29,10 @@ android {
 dependencies {
     // OkHttp — same compileOnly, so consumers can swap implementations freely
     compileOnly("com.squareup.okhttp3:okhttp:4.12.0")
+    // Needed at runtime for NetScope.mockRules (StateFlow) — mirrors core's public API.
+    implementation(libs.coroutines.core)
+
+    // Tests
+    testImplementation(libs.junit)
+    testImplementation("com.squareup.okhttp3:okhttp:4.12.0")
 }
