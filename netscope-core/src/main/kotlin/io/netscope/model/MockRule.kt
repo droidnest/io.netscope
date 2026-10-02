@@ -20,12 +20,30 @@ data class MockRule(
         REGEX("Regex"),
     }
 
+    // ── Compiled-regex cache ──────────────────────────────────────────────────
+    // Plain nullable fields rather than `by lazy`: Gson instantiates rules without running
+    // initializers, which would leave a lazy delegate null. @Transient keeps them out of the
+    // persisted JSON; body properties are not part of equals/hashCode/copy/toString.
+    // Racing threads may compile the same pattern twice — harmless.
+
+    @Volatile @Transient private var compiledRegex: Regex? = null
+    @Volatile @Transient private var regexInvalid: Boolean = false
+
+    private fun regexOrNull(): Regex? {
+        if (regexInvalid) return null
+        compiledRegex?.let { return it }
+        return runCatching { Regex(urlPattern) }
+            .onSuccess { compiledRegex = it }
+            .onFailure { regexInvalid = true }
+            .getOrNull()
+    }
+
     fun matches(url: String, requestMethod: String): Boolean {
         if (method != null && !method.equals(requestMethod, ignoreCase = true)) return false
         return when (matchType) {
             MatchType.CONTAINS -> url.contains(urlPattern, ignoreCase = true)
             MatchType.EXACT    -> url.equals(urlPattern, ignoreCase = true)
-            MatchType.REGEX    -> runCatching { url.matches(Regex(urlPattern)) }.getOrDefault(false)
+            MatchType.REGEX    -> regexOrNull()?.matches(url) ?: false
         }
     }
 }

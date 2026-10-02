@@ -19,4 +19,11 @@ data class NetScopeConfig(
 
     /** Always read the response body even for non-text content types. */
     val alwaysReadResponseBody: Boolean = true,
-)
+) {
+    /**
+     * [redactedHeaders] lower-cased for case-insensitive matching (HTTP header names are
+     * case-insensitive). Derived in the body, so it is recomputed on every `copy()` and is
+     * correct however the config was built — DSL, direct constructor or `updateConfig`.
+     */
+    internal val redactedLowercase: Set<String> = redactedHeaders.mapTo(HashSet()) { it.lowercase() }
+}

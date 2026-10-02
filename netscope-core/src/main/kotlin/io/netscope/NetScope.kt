@@ -30,12 +30,13 @@ import kotlinx.coroutines.flow.StateFlow
  */
 object NetScope {
 
-    lateinit var repository: TransactionRepository
+    // Written on the UI thread by init(), read on OkHttp threads — hence @Volatile.
+    @Volatile lateinit var repository: TransactionRepository
         private set
 
     // ── Mock rules ────────────────────────────────────────────────────────────
 
-    private var mockRuleStore: MockRuleStore? = null
+    @Volatile private var mockRuleStore: MockRuleStore? = null
     private val _emptyRules = MutableStateFlow<List<MockRule>>(emptyList())
 
     /** Live list of all configured mock rules. Observe in the UI via a ViewModel. */
@@ -48,10 +49,10 @@ object NetScope {
     fun toggleMockRule(id: String)       = mockRuleStore?.toggle(id)
 
     // Active config — kept in sync with the running interceptor and repository.
-    private lateinit var _config: NetScopeConfig
+    @Volatile private lateinit var _config: NetScopeConfig
     val config: NetScopeConfig get() = _config
 
-    private var initialized = false
+    @Volatile private var initialized = false
 
     @Volatile private var activeInterceptor: NetScopeInterceptor? = null
 
@@ -99,13 +100,21 @@ object NetScope {
     ): NetScopeInterceptor {
         val config = ConfigBuilder().apply(block).build()
         init(context.applicationContext, config)
-        return NetScopeInterceptor(repository, config).also { activeInterceptor = it }
+        // _config, not config: init() overlays the persisted Settings on top of the DSL values.
+        return NetScopeInterceptor(repository, _config).also { activeInterceptor = it }
     }
 
     /**
      * Creates a [NetScopeMockInterceptor] that short-circuits matching requests.
-     * Add it **before** [interceptor] in the OkHttpClient chain so mocked responses
-     * are still recorded in the transaction list.
+     * Add it **after** [interceptor] in the OkHttpClient chain — application interceptors
+     * run in the order added, so the recorder must come first to see mocked responses:
+     *
+     * ```kotlin
+     * OkHttpClient.Builder()
+     *     .addInterceptor(NetScope.interceptor(context))
+     *     .addInterceptor(NetScope.mockInterceptor())
+     *     .build()
+     * ```
      *
      * **Must be called after [interceptor]** so that the library is initialised.
      */
@@ -153,15 +162,28 @@ object NetScope {
     // ── Internal ──────────────────────────────────────────────────────────────
 
 
+    @Synchronized
     private fun init(context: Context, config: NetScopeConfig) {
         val db = NetScopeDatabase.getInstance(context)
-        _config = config
-        repository = TransactionRepositoryImpl(db.transactionDao(), config)
+        // Settings can only add redaction on top of what the code declares — never remove it.
+        val settings = NetScopeSettings(context)
+        val effective = settings.applyTo(config)
+        settings.savedNotificationStyle?.let { notificationStyle = it }
+        _config = effective
+        repository = TransactionRepositoryImpl(db.transactionDao(), effective)
         if (mockRuleStore == null) mockRuleStore = MockRuleStore(context)
         initialized = true
     }
 
-    /** Returns true if [interceptor] has been called at least once. */
+    /**
+     * Initialises storage with default capture config if [interceptor] has not run yet.
+     * Lets the inspector UI open after process death even when the host builds OkHttp lazily.
+     */
+    fun ensureInitialized(context: Context) {
+        if (!initialized) init(context.applicationContext, ConfigBuilder().build())
+    }
+
+    /** Returns true if [interceptor] or [ensureInitialized] has been called at least once. */
     fun isInitialized(): Boolean = initialized
 
     // ── DSL Builder ───────────────────────────────────────────────────────────

@@ -1,6 +1,7 @@
 package io.netscope.interceptor
 
 import io.netscope.NetScope
+import io.netscope.model.MockRule
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.Protocol
@@ -11,23 +12,31 @@ import okhttp3.ResponseBody.Companion.toResponseBody
  * OkHttp interceptor that short-circuits matching requests and returns a fixture response
  * defined by the first active [io.netscope.model.MockRule] whose pattern matches the URL.
  *
- * Add **before** [NetScopeInterceptor] so mocked requests are still recorded in the
- * transaction list with the fixture response:
+ * Application interceptors run in the order they are added, and this one never calls
+ * `proceed()` for a matching request. Add it **after** [NetScopeInterceptor] so the recorder
+ * sees the request first and records the fixture response it returns:
  *
  * ```kotlin
  * OkHttpClient.Builder()
- *     .addInterceptor(NetScope.mockInterceptor())   // ← mock first
- *     .addInterceptor(NetScope.interceptor(context))
+ *     .addInterceptor(NetScope.interceptor(context))   // ← recorder first
+ *     .addInterceptor(NetScope.mockInterceptor())      // ← then mock
  *     .build()
  * ```
+ *
+ * Added the other way round, mocked calls never reach [NetScopeInterceptor] and are not recorded.
  */
-class NetScopeMockInterceptor : Interceptor {
+class NetScopeMockInterceptor internal constructor(
+    /** Source of the current rules — injectable so tests don't need the [NetScope] singleton. */
+    private val rulesProvider: () -> List<MockRule>,
+) : Interceptor {
+
+    constructor() : this({ NetScope.mockRules.value })
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
         val url     = request.url.toString()
 
-        val rule = NetScope.mockRules.value
+        val rule = rulesProvider()
             .firstOrNull { it.isEnabled && it.matches(url, request.method) }
             ?: return chain.proceed(request)
 
