@@ -34,23 +34,25 @@ object NetScopeExporter {
      *
      * Example output:
      * ```
-     * curl -X POST 'https://api.example.com/v1/login' \
+     * curl -X 'POST' 'https://api.example.com/v1/login' \
      *   -H 'Content-Type: application/json' \
      *   -H 'Authorization: ██████' \
      *   --data-raw '{"email":"test@example.com"}'
      * ```
+     *
+     * Every argument taken from the transaction (method, URL, headers, body) is single-quoted
+     * for POSIX shells, so pasting the command can never execute anything else.
      */
     fun toCurl(transaction: NetTransaction): String = buildString {
-        append("curl -X ${transaction.method}")
-        append(" '${transaction.url}'")
+        append("curl -X ${transaction.method.shellQuote()}")
+        append(" ${transaction.url.shellQuote()}")
 
         transaction.requestHeaders.forEach { header ->
-            append(" \\\n  -H '${header.name}: ${header.value}'")
+            append(" \\\n  -H ${"${header.name}: ${header.value}".shellQuote()}")
         }
 
         transaction.requestBody?.let { body ->
-            val escaped = body.replace("'", "'\\''")
-            append(" \\\n  --data-raw '$escaped'")
+            append(" \\\n  --data-raw ${body.shellQuote()}")
         }
     }
 
@@ -118,7 +120,7 @@ object NetScopeExporter {
                 "version" to "1.2",
                 "creator" to mapOf(
                     "name" to "NetScope",
-                    "version" to "0.3.1",
+                    "version" to BuildConfig.VERSION_NAME,
                 ),
                 "entries" to entries,
             ),
@@ -227,10 +229,14 @@ object NetScopeExporter {
 
     // ── Private helpers ───────────────────────────────────────────────────────
 
+    /** Wraps in single quotes; each embedded `'` becomes `'\''` (close, escaped quote, reopen). */
+    private fun String.shellQuote(): String = "'" + replace("'", "'\\''") + "'"
+
     private fun List<NetHeader>.toHarHeaders(): List<Map<String, String>> =
         map { mapOf("name" to it.name, "value" to it.value) }
 
-    private fun parseQueryString(query: String?): List<Map<String, String>> {
+    /** Splits `a=1&b=2` into HAR `{name, value}` pairs; pairs without `=` are dropped. Internal for tests. */
+    internal fun parseQueryString(query: String?): List<Map<String, String>> {
         if (query.isNullOrBlank()) return emptyList()
         return query.split("&").mapNotNull { pair ->
             val idx = pair.indexOf('=')
