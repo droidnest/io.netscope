@@ -50,7 +50,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -77,10 +76,11 @@ import io.netscope.ui.component.NetScopeDarkBackground
 import io.netscope.ui.component.NetScopeMuted
 import io.netscope.ui.component.NetScopeOnSurface
 import io.netscope.ui.component.NetScopeSurface
-import io.netscope.NetScope
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import io.netscope.NotificationStyle
-import io.netscope.ui.preferences.NetScopePreferences
 import io.netscope.ui.preferences.ThemeMode
+import io.netscope.ui.viewmodel.SettingsViewModel
 
 // ── Picker options ────────────────────────────────────────────────────────────
 
@@ -111,15 +111,10 @@ fun SettingsScreen(
     currentTheme: ThemeMode,
     onThemeChange: (ThemeMode) -> Unit,
 ) {
-    val context = LocalContext.current
-    val prefs   = remember { NetScopePreferences(context) }
-
-    var maxTransactions    by rememberSaveable { mutableStateOf(prefs.maxTransactions) }
-    var maxBodySize        by rememberSaveable { mutableStateOf(prefs.maxBodySizeBytes) }
-    var alwaysReadBody     by rememberSaveable { mutableStateOf(prefs.alwaysReadResponseBody) }
-    var redactedHeaders    by rememberSaveable { mutableStateOf(prefs.redactedHeaders) }
-    var shakeToOpen        by rememberSaveable { mutableStateOf(prefs.shakeToOpen) }
-    var notifStyle         by rememberSaveable { mutableStateOf(prefs.notificationStyle) }
+    val viewModel: SettingsViewModel = viewModel(
+        factory = SettingsViewModel.Factory(LocalContext.current.applicationContext),
+    )
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
 
     var showClearDialog    by remember { mutableStateOf(false) }
     var showAddHeaderField by remember { mutableStateOf(false) }
@@ -169,10 +164,7 @@ fun SettingsScreen(
                 ) {
                     ThemeModePicker(
                         selected = currentTheme,
-                        onSelect = { mode ->
-                            prefs.themeMode = mode
-                            onThemeChange(mode)
-                        },
+                        onSelect = onThemeChange,
                     )
                 }
             }
@@ -186,12 +178,8 @@ fun SettingsScreen(
                 ) {
                     OptionChips(
                         options  = MAX_TX_OPTIONS,
-                        selected = maxTransactions,
-                        onSelect = { v ->
-                            maxTransactions = v
-                            prefs.maxTransactions = v
-                            NetScope.updateConfig { copy(maxTransactions = v) }
-                        },
+                        selected = state.maxTransactions,
+                        onSelect = viewModel::onMaxTransactionsSelected,
                     )
                 }
 
@@ -203,12 +191,8 @@ fun SettingsScreen(
                 ) {
                     OptionChips(
                         options  = BODY_SIZE_OPTIONS,
-                        selected = maxBodySize,
-                        onSelect = { v ->
-                            maxBodySize = v
-                            prefs.maxBodySizeBytes = v
-                            NetScope.updateConfig { copy(maxBodySize = v) }
-                        },
+                        selected = state.maxBodySizeBytes,
+                        onSelect = viewModel::onMaxBodySizeSelected,
                     )
                 }
 
@@ -219,12 +203,8 @@ fun SettingsScreen(
                     subtitle = "Force-read bodies even for non-text content types.",
                     trailing = {
                         NetScopeSwitch(
-                            checked         = alwaysReadBody,
-                            onCheckedChange = { v ->
-                                alwaysReadBody = v
-                                prefs.alwaysReadResponseBody = v
-                                NetScope.updateConfig { copy(alwaysReadResponseBody = v) }
-                            },
+                            checked         = state.alwaysReadResponseBody,
+                            onCheckedChange = viewModel::onAlwaysReadResponseBodyChanged,
                         )
                     },
                 )
@@ -234,10 +214,11 @@ fun SettingsScreen(
             SettingsSection(title = "Privacy") {
                 SettingsRow(
                     title    = "Header redaction rules",
-                    subtitle = "Matched header values are replaced with ██████ in the UI and all exports.",
+                    subtitle = "Matched header values are replaced with ██████ in the UI and all exports. " +
+                        "Headers declared in code are always redacted; removals apply on next launch.",
                 ) {
                     RedactedHeadersEditor(
-                        headers        = redactedHeaders,
+                        headers        = state.redactedHeaders,
                         showAddField   = showAddHeaderField,
                         addInput       = addHeaderInput,
                         focusRequester = focusRequester,
@@ -248,23 +229,12 @@ fun SettingsScreen(
                             if (!showAddHeaderField) focusManager.clearFocus()
                         },
                         onConfirmAdd   = {
-                            val trimmed = addHeaderInput.trim()
-                            if (trimmed.isNotEmpty()) {
-                                val updated = redactedHeaders + trimmed.lowercase()
-                                redactedHeaders = updated
-                                prefs.redactedHeaders = updated
-                                NetScope.updateConfig { copy(redactedHeaders = updated.map { it.lowercase() }.toSet()) }
-                            }
+                            viewModel.onAddRedactedHeader(addHeaderInput)
                             addHeaderInput = ""
                             showAddHeaderField = false
                             focusManager.clearFocus()
                         },
-                        onRemove       = { header ->
-                            val updated = redactedHeaders - header
-                            redactedHeaders = updated
-                            prefs.redactedHeaders = updated
-                            NetScope.updateConfig { copy(redactedHeaders = updated.map { it.lowercase() }.toSet()) }
-                        },
+                        onRemove       = viewModel::onRemoveRedactedHeader,
                     )
                 }
             }
@@ -277,12 +247,8 @@ fun SettingsScreen(
                     subtitle = "Shake the device to launch the NetScope transaction list.",
                     trailing = {
                         NetScopeSwitch(
-                            checked         = shakeToOpen,
-                            onCheckedChange = { v ->
-                                shakeToOpen = v
-                                prefs.shakeToOpen = v
-                                NetScope.setShakeEnabled(v)
-                            },
+                            checked         = state.shakeToOpen,
+                            onCheckedChange = viewModel::onShakeToOpenChanged,
                         )
                     },
                 )
@@ -294,12 +260,8 @@ fun SettingsScreen(
                     subtitle = "Controls how much information appears in the status-bar notification.",
                 ) {
                     NotificationStylePicker(
-                        selected = notifStyle,
-                        onSelect = { v ->
-                            notifStyle = v
-                            prefs.notificationStyle = v
-                            NetScope.notificationStyle = v
-                        },
+                        selected = state.notificationStyle,
+                        onSelect = viewModel::onNotificationStyleSelected,
                     )
                 }
             }
@@ -331,7 +293,7 @@ fun SettingsScreen(
                             .padding(horizontal = 10.dp, vertical = 4.dp),
                     ) {
                         Text(
-                            text = "v0.5.0",
+                            text = "v${io.netscope.ui.BuildConfig.VERSION_NAME}",
                             color = NetScopeAccent,
                             fontSize = 11.sp,
                             fontFamily = FontFamily.Monospace,

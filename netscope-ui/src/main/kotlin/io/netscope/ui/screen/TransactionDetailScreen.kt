@@ -51,10 +51,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -71,6 +71,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.netscope.export.NetScopeExporter
 import io.netscope.model.NetHeader
 import io.netscope.model.NetTransaction
@@ -94,7 +95,9 @@ import io.netscope.ui.component.NetScopeText2
 import io.netscope.ui.component.StatusBadge
 import io.netscope.ui.component.color
 import io.netscope.ui.component.formatBytes
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -105,7 +108,7 @@ fun TransactionDetailScreen(
     viewModel: io.netscope.ui.viewmodel.NetScopeViewModel,
     onBack: () -> Unit,
 ) {
-    val transaction by viewModel.selectedTransaction.collectAsState()
+    val transaction by viewModel.selectedTransaction.collectAsStateWithLifecycle()
     var selectedTab by remember { mutableIntStateOf(0) }
     var previousTab by remember { mutableIntStateOf(0) }
     var overflowExpanded by remember { mutableStateOf(false) }
@@ -923,7 +926,10 @@ private fun HeaderTable(headers: List<NetHeader>) {
 
 @Composable
 private fun BodyView(body: String, modifier: Modifier = Modifier) {
-    val highlighted = remember(body) { body.highlightedBody() }
+    // Pretty-printing + tokenising can take a while for large bodies — keep it off the main thread.
+    val highlighted by produceState<AnnotatedString?>(initialValue = null, body) {
+        value = withContext(Dispatchers.Default) { body.highlightedBody() }
+    }
     val scrollState = rememberScrollState()
     Box(
         modifier = modifier
@@ -934,12 +940,22 @@ private fun BodyView(body: String, modifier: Modifier = Modifier) {
             .horizontalScroll(scrollState)
             .padding(12.dp),
     ) {
-        Text(
-            text       = highlighted,
-            fontSize   = 10.sp,
-            fontFamily = FontFamily.Monospace,
-            lineHeight  = 17.5.sp,
-        )
+        val text = highlighted
+        if (text == null) {
+            Text(
+                text       = "Formatting…",
+                color      = NetScopeMuted,
+                fontSize   = 10.sp,
+                fontFamily = FontFamily.Monospace,
+            )
+        } else {
+            Text(
+                text       = text,
+                fontSize   = 10.sp,
+                fontFamily = FontFamily.Monospace,
+                lineHeight  = 17.5.sp,
+            )
+        }
     }
 }
 

@@ -43,6 +43,11 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+/** One formatter per thread (composition runs on main) instead of one per list item. */
+private val TIME_FORMAT = object : ThreadLocal<SimpleDateFormat>() {
+    override fun initialValue() = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+}
+
 // ── Chips ─────────────────────────────────────────────────────────────────────
 
 @Composable
@@ -118,7 +123,7 @@ fun TransactionItem(
     } else 1f
 
     val timeLabel = remember(transaction.requestDate) {
-        SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(transaction.requestDate))
+        TIME_FORMAT.get()!!.format(Date(transaction.requestDate))
     }
 
     Row(

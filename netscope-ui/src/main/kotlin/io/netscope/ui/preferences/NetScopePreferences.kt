@@ -2,38 +2,45 @@ package io.netscope.ui.preferences
 
 import android.content.Context
 import androidx.core.content.edit
+import io.netscope.NetScopeSettings
 import io.netscope.NotificationStyle
 
 /**
- * Thin SharedPreferences wrapper that persists NetScope UI settings.
+ * Thin SharedPreferences wrapper that persists NetScope **interface** settings
+ * (shakeToOpen, notificationStyle, themeMode).
  *
- * Capture settings take effect on the next app launch.
- * Interface settings (shakeToOpen, notificationStyle, themeMode) are
- * applied immediately at runtime via callback.
+ * Capture & privacy settings are owned by core ([NetScopeSettings]) so they are
+ * re-applied by `NetScope.interceptor(...)` on every launch. The capture properties
+ * below are kept only for source compatibility and delegate to [NetScopeSettings].
  */
 class NetScopePreferences(context: Context) {
 
-    private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    private val prefs    = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    private val settings = NetScopeSettings(context)
 
-    // ── Capture ───────────────────────────────────────────────────────────────
+    // ── Capture (delegated to core) ───────────────────────────────────────────
 
+    @Deprecated("Owned by core.", ReplaceWith("NetScopeSettings(context).maxTransactions", "io.netscope.NetScopeSettings"))
     var maxTransactions: Int
-        get() = prefs.getInt(KEY_MAX_TX, DEFAULT_MAX_TX)
-        set(v) = prefs.edit { putInt(KEY_MAX_TX, v) }
+        get() = settings.maxTransactions
+        set(v) { settings.maxTransactions = v }
 
+    @Deprecated("Owned by core.", ReplaceWith("NetScopeSettings(context).maxBodySizeBytes", "io.netscope.NetScopeSettings"))
     var maxBodySizeBytes: Long
-        get() = prefs.getLong(KEY_MAX_BODY, DEFAULT_MAX_BODY)
-        set(v) = prefs.edit { putLong(KEY_MAX_BODY, v) }
+        get() = settings.maxBodySizeBytes
+        set(v) { settings.maxBodySizeBytes = v }
 
+    @Deprecated("Owned by core.", ReplaceWith("NetScopeSettings(context).alwaysReadResponseBody", "io.netscope.NetScopeSettings"))
     var alwaysReadResponseBody: Boolean
-        get() = prefs.getBoolean(KEY_ALWAYS_READ, true)
-        set(v) = prefs.edit { putBoolean(KEY_ALWAYS_READ, v) }
+        get() = settings.alwaysReadResponseBody
+        set(v) { settings.alwaysReadResponseBody = v }
 
-    // ── Privacy ───────────────────────────────────────────────────────────────
+    // ── Privacy (delegated to core) ───────────────────────────────────────────
 
+    @Deprecated("Owned by core.", ReplaceWith("NetScopeSettings(context).redactedHeaders", "io.netscope.NetScopeSettings"))
     var redactedHeaders: Set<String>
-        get() = prefs.getStringSet(KEY_REDACTED, DEFAULT_REDACTED) ?: DEFAULT_REDACTED
-        set(v) = prefs.edit { putStringSet(KEY_REDACTED, v) }
+        get() = settings.redactedHeaders
+        set(v) { settings.redactedHeaders = v }
 
     // ── Interface ─────────────────────────────────────────────────────────────
 
@@ -52,18 +59,20 @@ class NetScopePreferences(context: Context) {
     // ── Keys & defaults ───────────────────────────────────────────────────────
 
     companion object {
+        // Same file as NetScopeSettings — interface keys live alongside the core-owned capture keys.
         private const val PREFS_NAME       = "netscope_settings"
-        private const val KEY_MAX_TX       = "max_transactions"
-        private const val KEY_MAX_BODY     = "max_body_size"
-        private const val KEY_ALWAYS_READ  = "always_read_response_body"
-        private const val KEY_REDACTED     = "redacted_headers"
         private const val KEY_SHAKE        = "shake_to_open"
         private const val KEY_NOTIF_STYLE  = "notification_style"
         private const val KEY_THEME        = "theme_mode"
 
-        const val DEFAULT_MAX_TX   = 500
-        const val DEFAULT_MAX_BODY = 250_000L
-        val DEFAULT_REDACTED: Set<String> = setOf("Authorization", "Cookie", "Set-Cookie")
+        @Deprecated("Owned by core.", ReplaceWith("NetScopeSettings.DEFAULT_MAX_TX", "io.netscope.NetScopeSettings"))
+        const val DEFAULT_MAX_TX   = NetScopeSettings.DEFAULT_MAX_TX
+
+        @Deprecated("Owned by core.", ReplaceWith("NetScopeSettings.DEFAULT_MAX_BODY", "io.netscope.NetScopeSettings"))
+        const val DEFAULT_MAX_BODY = NetScopeSettings.DEFAULT_MAX_BODY
+
+        @Deprecated("Owned by core.", ReplaceWith("NetScopeSettings.DEFAULT_REDACTED", "io.netscope.NetScopeSettings"))
+        val DEFAULT_REDACTED: Set<String> get() = NetScopeSettings.DEFAULT_REDACTED
     }
 }
 

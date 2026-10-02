@@ -5,105 +5,161 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import io.netscope.NetScope
 import io.netscope.domain.usecase.ClearTransactionsUseCase
+import io.netscope.domain.usecase.ExportTransactionsUseCase
 import io.netscope.domain.usecase.FilterTransactionsUseCase
-import io.netscope.domain.usecase.GetTransactionByIdUseCase
+import io.netscope.domain.usecase.ObserveTransactionUseCase
 import io.netscope.domain.usecase.SortOrder
+import io.netscope.export.NetScopeExporter
 import io.netscope.model.NetTransaction
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class NetScopeViewModel(
-    private val filterTransactions: FilterTransactionsUseCase,
-    private val getById: GetTransactionByIdUseCase,
-    private val clearAll: ClearTransactionsUseCase,
+    private val filterTransactionsUseCase: FilterTransactionsUseCase,
+    private val observeTransactionUseCase: ObserveTransactionUseCase,
+    private val exportTransactionsUseCase: ExportTransactionsUseCase,
+    private val clearTransactionsUseCase: ClearTransactionsUseCase,
+    private val defaultDispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) : ViewModel() {
 
     // ── Search ────────────────────────────────────────────────────────────────
-    val searchQuery = MutableStateFlow("")
+    private val _searchQuery = MutableStateFlow("")
+    val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
 
     // ── Filter / sort state ───────────────────────────────────────────────────
-    val filterState = MutableStateFlow(FilterState())
+    private val _filterState = MutableStateFlow(FilterState())
+    val filterState: StateFlow<FilterState> = _filterState.asStateFlow()
 
     // ── Transaction list ──────────────────────────────────────────────────────
     /**
      * Emits the filtered + sorted list whenever the query, filter, or DB changes.
-     * Uses [flatMapLatest] so a new upstream Flow is created whenever the filter
-     * params change, cancelling the previous collection automatically.
+     * Rows come from the list projection: [NetTransaction.requestBody] and
+     * [NetTransaction.responseBody] are always null here.
      */
     val transactions: StateFlow<List<NetTransaction>> =
-        combine(searchQuery, filterState) { query, filter -> query to filter }
-            .flatMapLatest { (query, filter) ->
-                filterTransactions(
-                    query = query,
-                    methods = filter.methods,
-                    statusClasses = filter.statusClasses,
-                    sortOrder = filter.sortOrder,
-                )
-            }
+        combine(_searchQuery, _filterState) { query, filter -> query to filter }
+            .flatMapLatest { (query, filter) -> filteredTransactions(query, filter) }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    // ── Stats ─────────────────────────────────────────────────────────────────
+    /** Aggregates over the filtered list, computed off the main thread. Null until the first result. */
+    internal val stats: StateFlow<StatsData?> =
+        transactions
+            .map { StatsData.compute(it) }
+            .flowOn(defaultDispatcher)
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
     // ── Detail ────────────────────────────────────────────────────────────────
-    private val _selectedTransaction = MutableStateFlow<NetTransaction?>(null)
-    val selectedTransaction: StateFlow<NetTransaction?> = _selectedTransaction
+    private val selectedId = MutableStateFlow<Long?>(null)
+
+    /** Live view of the selected transaction (bodies included); re-emits as its response lands. */
+    val selectedTransaction: StateFlow<NetTransaction?> =
+        selectedId
+            .flatMapLatest { id ->
+                // Emit null first so a previously selected row never flashes while the new one loads.
+                if (id == null) flowOf(null) else observeTransactionUseCase(id).onStart { emit(null) }
+            }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     fun selectTransaction(id: Long) {
-        viewModelScope.launch {
-            _selectedTransaction.value = getById(id)
-        }
+        selectedId.value = id
     }
 
     fun clearSelection() {
-        _selectedTransaction.value = null
+        selectedId.value = null
+    }
+
+    // ── Export ────────────────────────────────────────────────────────────────
+    private val _harExports = Channel<String>(Channel.BUFFERED)
+
+    /** One-shot HAR documents ready to be shared; each is delivered to exactly one collector. */
+    val harExports: Flow<String> = _harExports.receiveAsFlow()
+
+    /**
+     * Builds a HAR of the currently visible (filtered + sorted) transactions with their
+     * bodies loaded, entirely off the main thread, and emits it on [harExports].
+     */
+    fun exportVisibleAsHar() {
+        viewModelScope.launch {
+            val visible = filteredTransactions(_searchQuery.value, _filterState.value).first()
+            val har = exportTransactionsUseCase { all ->
+                val withBodies = all.associateBy { it.id }
+                NetScopeExporter.toHar(visible.mapNotNull { withBodies[it.id] })
+            }
+            _harExports.send(har)
+        }
     }
 
     // ── Actions ───────────────────────────────────────────────────────────────
     fun clearAllTransactions() {
-        viewModelScope.launch { clearAll() }
+        viewModelScope.launch { clearTransactionsUseCase() }
     }
 
     fun onSearchQueryChange(query: String) {
-        searchQuery.value = query
+        _searchQuery.value = query
     }
 
     fun toggleMethodFilter(method: String) {
-        filterState.value = filterState.value.let { state ->
-            val updated = state.methods.toMutableSet()
-            if (method in updated) updated.remove(method) else updated.add(method)
+        _filterState.update { state ->
+            val updated = if (method in state.methods) state.methods - method else state.methods + method
             state.copy(methods = updated)
         }
     }
 
     fun toggleStatusClassFilter(statusClass: NetTransaction.StatusClass) {
-        filterState.value = filterState.value.let { state ->
-            val updated = state.statusClasses.toMutableSet()
-            if (statusClass in updated) updated.remove(statusClass) else updated.add(statusClass)
+        _filterState.update { state ->
+            val updated = if (statusClass in state.statusClasses) state.statusClasses - statusClass
+                          else state.statusClasses + statusClass
             state.copy(statusClasses = updated)
         }
     }
 
     fun setSortOrder(order: SortOrder) {
-        filterState.value = filterState.value.copy(sortOrder = order)
+        _filterState.update { it.copy(sortOrder = order) }
     }
 
     fun clearFilters() {
-        filterState.value = FilterState()
-        searchQuery.value = ""
+        _filterState.value = FilterState()
+        _searchQuery.value = ""
     }
+
+    private fun filteredTransactions(query: String, filter: FilterState): Flow<List<NetTransaction>> =
+        filterTransactionsUseCase(
+            query         = query,
+            methods       = filter.methods,
+            statusClasses = filter.statusClasses,
+            sortOrder     = filter.sortOrder,
+        )
 
     // ── Factory ───────────────────────────────────────────────────────────────
     class Factory : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            val repo = NetScope.repository
+            val repository = NetScope.repository
             return NetScopeViewModel(
-                filterTransactions = FilterTransactionsUseCase(repo),
-                getById = GetTransactionByIdUseCase(repo),
-                clearAll = ClearTransactionsUseCase(repo),
+                filterTransactionsUseCase = FilterTransactionsUseCase(repository),
+                observeTransactionUseCase = ObserveTransactionUseCase(repository),
+                exportTransactionsUseCase = ExportTransactionsUseCase(repository),
+                clearTransactionsUseCase  = ClearTransactionsUseCase(repository),
             ) as T
         }
     }

@@ -40,6 +40,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -56,6 +57,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.netscope.model.MockRule
 import io.netscope.ui.component.ColorAmber
+import io.netscope.ui.component.ColorError
 import io.netscope.ui.component.ColorPurple
 import io.netscope.ui.component.NetScopeAccent
 import io.netscope.ui.component.NetScopeBorder
@@ -89,8 +91,16 @@ fun MockRuleEditorScreen(
     var enabled     by rememberSaveable { mutableStateOf(existing?.isEnabled ?: true) }
 
     val statusCodeInt = statusCode.toIntOrNull()
+
+    // ── Validation ──
+    val patternError = remember(urlPattern, matchType) { urlPatternError(urlPattern.trim(), matchType) }
+    val statusCodeError = when {
+        statusCodeInt == null          -> if (statusCode.isEmpty()) null else "Enter a status code"
+        statusCodeInt !in 100..599     -> "Must be between 100 and 599"
+        else                           -> null
+    }
     val isValid = name.isNotBlank() && urlPattern.isNotBlank() &&
-        statusCodeInt?.let { it in 100..599 } == true
+        patternError == null && statusCodeInt?.let { it in 100..599 } == true
 
     Scaffold(
         topBar = {
@@ -180,7 +190,9 @@ fun MockRuleEditorScreen(
                     onValueChange = { urlPattern = it },
                     placeholder = "/api/login",
                     fontFamily = FontFamily.Monospace,
+                    isError = patternError != null,
                 )
+                if (patternError != null) FieldError(patternError)
 
                 FieldLabel("MATCH TYPE")
                 val accent = NetScopeAccent
@@ -221,6 +233,7 @@ fun MockRuleEditorScreen(
                         placeholder = "200",
                         keyboardType = KeyboardType.Number,
                         modifier = Modifier.weight(1f),
+                        isError = statusCodeError != null,
                     )
                     // Status code dot
                     Box(
@@ -230,6 +243,7 @@ fun MockRuleEditorScreen(
                             .background(statusCodeInt?.let { statusColor(it) } ?: NetScopeMuted),
                     )
                 }
+                if (statusCodeError != null) FieldError(statusCodeError)
 
                 FieldLabel("CONTENT-TYPE")
                 EditorTextField(
@@ -414,7 +428,26 @@ private fun PreviewChip(text: String, color: Color) {
     }
 }
 
+// ── Validation ────────────────────────────────────────────────────────────────
+
+/** Returns a user-facing error for [pattern], or null when it is usable for [matchType]. */
+private fun urlPatternError(pattern: String, matchType: MockRule.MatchType): String? {
+    if (matchType != MockRule.MatchType.REGEX || pattern.isEmpty()) return null
+    return runCatching { Regex(pattern) }.exceptionOrNull()?.let { e ->
+        "Invalid regex" + (e.message?.lineSequence()?.firstOrNull()?.let { ": $it" } ?: "")
+    }
+}
+
 // ── Field helpers ─────────────────────────────────────────────────────────────
+
+@Composable
+private fun FieldError(text: String) {
+    Text(
+        text = text,
+        color = ColorError,
+        fontSize = 11.sp,
+    )
+}
 
 @Composable
 private fun FieldLabel(text: String) {
@@ -437,6 +470,7 @@ private fun EditorTextField(
     singleLine: Boolean = true,
     minLines: Int = 1,
     keyboardType: KeyboardType = KeyboardType.Text,
+    isError: Boolean = false,
 ) {
     BasicTextField(
         value = value,
@@ -454,7 +488,11 @@ private fun EditorTextField(
             .fillMaxWidth()
             .clip(RoundedCornerShape(8.dp))
             .background(NetScopeCardAlt)
-            .border(0.5.dp, NetScopeBorder, RoundedCornerShape(8.dp))
+            .border(
+                width = if (isError) 1.dp else 0.5.dp,
+                color = if (isError) ColorError else NetScopeBorder,
+                shape = RoundedCornerShape(8.dp),
+            )
             .heightIn(min = if (singleLine) 0.dp else 120.dp)
             .padding(horizontal = 12.dp, vertical = 10.dp),
         decorationBox = { inner ->

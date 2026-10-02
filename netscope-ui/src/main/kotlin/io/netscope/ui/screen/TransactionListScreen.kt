@@ -60,7 +60,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -76,6 +76,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.netscope.domain.usecase.SortOrder
 import io.netscope.model.NetTransaction
 import io.netscope.ui.component.ColorAmber
@@ -97,6 +98,7 @@ import io.netscope.ui.component.color
 import io.netscope.ui.component.methodColor
 import io.netscope.ui.viewmodel.FilterState
 import io.netscope.ui.viewmodel.NetScopeViewModel
+import io.netscope.ui.viewmodel.StatsData
 
 private val STATUS_FILTER_CHIPS = listOf(
     "2xx" to setOf(NetTransaction.StatusClass.SUCCESS),
@@ -114,10 +116,22 @@ fun TransactionListScreen(
     viewModel: NetScopeViewModel,
     onTransactionClick: (Long) -> Unit,
 ) {
-    val transactions by viewModel.transactions.collectAsState()
-    val searchQuery by viewModel.searchQuery.collectAsState()
-    val filterState by viewModel.filterState.collectAsState()
+    val transactions by viewModel.transactions.collectAsStateWithLifecycle()
+    val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
+    val filterState by viewModel.filterState.collectAsStateWithLifecycle()
+    val stats by viewModel.stats.collectAsStateWithLifecycle()
     val context = LocalContext.current
+
+    // HAR documents are built off the main thread in the ViewModel and delivered once.
+    LaunchedEffect(viewModel) {
+        viewModel.harExports.collect { har ->
+            NetScopeExporter.share(
+                context      = context,
+                text         = har,
+                chooserTitle = "Export as HAR",
+            )
+        }
+    }
     var sortMenuExpanded by remember { mutableStateOf(false) }
     var exportMenuExpanded by remember { mutableStateOf(false) }
 
@@ -239,11 +253,7 @@ fun TransactionListScreen(
                                 enabled = transactions.isNotEmpty(),
                                 onClick = {
                                     exportMenuExpanded = false
-                                    NetScopeExporter.share(
-                                        context = context,
-                                        text = NetScopeExporter.toHar(transactions),
-                                        chooserTitle = "Export as HAR",
-                                    )
+                                    viewModel.exportVisibleAsHar()
                                 },
                             )
                         }
@@ -282,9 +292,7 @@ fun TransactionListScreen(
             )
 
             // Stats summary — count · errors · avg time
-            if (transactions.isNotEmpty()) {
-                StatsBar(transactions)
-            }
+            stats?.takeIf { transactions.isNotEmpty() && it.totalCount > 0 }?.let { StatsBar(it) }
 
             HorizontalDivider(
                 color = NetScopeBorder,
@@ -316,20 +324,9 @@ fun TransactionListScreen(
 // ── Stats bar ─────────────────────────────────────────────────────────────────
 
 @Composable
-private fun StatsBar(transactions: List<NetTransaction>) {
-    val (errorCount, avgMs, totalBytes) = remember(transactions) {
-        val errors = transactions.count {
-            it.statusClass in setOf(
-                NetTransaction.StatusClass.CLIENT_ERROR,
-                NetTransaction.StatusClass.SERVER_ERROR,
-                NetTransaction.StatusClass.ERROR,
-            )
-        }
-        val durations = transactions.mapNotNull { it.durationMs }
-        val avg = if (durations.isEmpty()) null else durations.average().toLong()
-        val bytes = transactions.sumOf { it.totalSize }
-        Triple(errors, avg, bytes)
-    }
+private fun StatsBar(stats: StatsData) {
+    val errorCount = stats.errorCount
+    val avgMs      = stats.avgDurationMs
 
     Row(
         modifier = Modifier
@@ -337,10 +334,10 @@ private fun StatsBar(transactions: List<NetTransaction>) {
             .padding(horizontal = 16.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        StatCard(value = "${transactions.size}", label = "REQUESTS", valueColor = NetScopeAccent)
+        StatCard(value = "${stats.totalCount}", label = "REQUESTS", valueColor = NetScopeAccent)
         StatCard(value = "$errorCount", label = "ERRORS", valueColor = if (errorCount > 0) ColorAmber else NetScopeMuted)
         StatCard(value = avgMs?.let { "${it}ms" } ?: "—", label = "AVG TIME", valueColor = if (avgMs != null) ColorSuccess else NetScopeMuted)
-        StatCard(value = totalBytes.formatBytes(), label = "TOTAL", valueColor = ColorPurple)
+        StatCard(value = stats.totalBytes.formatBytes(), label = "TOTAL", valueColor = ColorPurple)
     }
 }
 

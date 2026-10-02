@@ -40,9 +40,8 @@ class NetScopeActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        check(NetScope.isInitialized()) {
-            "NetScope not initialized. Call NetScope.interceptor(context) before launching."
-        }
+        // Process death may restore this Activity before the host app rebuilds its OkHttp client.
+        NetScope.ensureInitialized(this)
 
         setContent {
             val prefs      = remember { NetScopePreferences(this@NetScopeActivity) }

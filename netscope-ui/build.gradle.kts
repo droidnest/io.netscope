@@ -21,10 +21,12 @@ android {
     defaultConfig {
         minSdk = 23
         consumerProguardFiles("consumer-rules.pro")
+        buildConfigField("String", "VERSION_NAME", "\"${project.properties["VERSION_NAME"]}\"")
     }
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
 
@@ -34,6 +36,8 @@ android {
     }
 
     kotlin { jvmToolchain(17) }
+
+    testOptions { unitTests.isIncludeAndroidResources = true }
 }
 
 dependencies {
@@ -54,4 +58,11 @@ dependencies {
     implementation(libs.coroutines.android)
 
     debugImplementation(libs.compose.ui.tooling)
+
+    // Tests
+    testImplementation(libs.junit)
+    testImplementation(libs.coroutines.test)
+    testImplementation(libs.turbine)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.core)
 }

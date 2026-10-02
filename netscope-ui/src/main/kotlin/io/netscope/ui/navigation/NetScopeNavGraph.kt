@@ -32,6 +32,7 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -131,10 +132,7 @@ fun NetScopeNavGraph(
             composable(ROUTE_LIST) {
                 TransactionListScreen(
                     viewModel          = viewModel,
-                    onTransactionClick = { id ->
-                        viewModel.selectTransaction(id)
-                        navController.navigate("detail/$id")
-                    },
+                    onTransactionClick = { id -> navController.navigate("detail/$id") },
                 )
             }
 
@@ -150,10 +148,7 @@ fun NetScopeNavGraph(
             composable(ROUTE_STATS) {
                 StatsScreen(
                     viewModel          = viewModel,
-                    onTransactionClick = { id ->
-                        viewModel.selectTransaction(id)
-                        navController.navigate("detail/$id")
-                    },
+                    onTransactionClick = { id -> navController.navigate("detail/$id") },
                 )
             }
 
@@ -171,7 +166,12 @@ fun NetScopeNavGraph(
             composable(
                 route     = ROUTE_DETAIL,
                 arguments = listOf(navArgument("transactionId") { type = NavType.LongType }),
-            ) {
+            ) { backStack ->
+                // The nav arg is the source of truth so the screen survives process death.
+                val transactionId = backStack.arguments?.getLong("transactionId")
+                LaunchedEffect(transactionId) {
+                    transactionId?.let(viewModel::selectTransaction)
+                }
                 TransactionDetailScreen(
                     viewModel = viewModel,
                     onBack    = {
