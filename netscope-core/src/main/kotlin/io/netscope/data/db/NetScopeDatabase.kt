@@ -10,8 +10,8 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [TransactionEntity::class],
-    version = 2,
-    exportSchema = false,
+    version = 3,
+    exportSchema = true,
 )
 @TypeConverters(HeaderListConverter::class)
 abstract class NetScopeDatabase : RoomDatabase() {
@@ -31,7 +31,9 @@ abstract class NetScopeDatabase : RoomDatabase() {
                     NetScopeDatabase::class.java,
                     DB_NAME,
                 )
-                    .addMigrations(MIGRATION_1_2)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                    // Debug tool: a downgraded host app may drop captured traffic rather than crash.
+                    .fallbackToDestructiveMigrationOnDowngrade(dropAllTables = true)
                     .build()
                     .also { instance = it }
             }
@@ -39,12 +41,22 @@ abstract class NetScopeDatabase : RoomDatabase() {
         // ── Migrations ────────────────────────────────────────────────────────
 
         /** Adds the four network-phase timing columns (all nullable). */
-        private val MIGRATION_1_2 = object : Migration(1, 2) {
+        internal val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE transactions ADD COLUMN dnsMs     INTEGER")
                 db.execSQL("ALTER TABLE transactions ADD COLUMN connectMs INTEGER")
                 db.execSQL("ALTER TABLE transactions ADD COLUMN sslMs     INTEGER")
                 db.execSQL("ALTER TABLE transactions ADD COLUMN ttfbMs    INTEGER")
+            }
+        }
+
+        /** Indexes `requestDate` (list ORDER BY + prune). Name matches Room's generated one. */
+        internal val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_transactions_requestDate` " +
+                    "ON `transactions` (`requestDate`)"
+                )
             }
         }
     }
