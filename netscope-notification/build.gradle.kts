@@ -27,10 +27,19 @@ android {
     }
 
     kotlin { jvmToolchain(17) }
+
+    testOptions { unitTests.isIncludeAndroidResources = true }
 }
 
 dependencies {
     api(project(":netscope-core"))
     implementation(libs.core.ktx)
     implementation(libs.coroutines.android)
+
+    // Tests
+    testImplementation(libs.junit)
+    testImplementation(libs.coroutines.test)
+    testImplementation(libs.turbine)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.core)
 }

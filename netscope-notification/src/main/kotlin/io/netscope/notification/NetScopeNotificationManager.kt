@@ -12,7 +12,10 @@ import io.netscope.NotificationStyle
 import io.netscope.model.NetTransaction
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 /**
@@ -34,16 +37,10 @@ object NetScopeNotificationManager {
     private const val NOTIFICATION_ID = 0x4E53 // 'N','S'
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private var initialized = false
 
-    /**
-     * Starts observing the NetScope repository and posts/updates a notification
-     * whenever the transaction list changes.
-     *
-     * @param context       Any context; the application context is used internally.
-     * @param launchActivity Optional [Activity] class to open when the notification is tapped.
-     *                       Pass `NetScopeActivity::class.java` from the `netscope-ui` artifact.
-     */
+    /** Active collector; non-null while the notification is live. Guarded by `this`. */
+    private var collectJob: Job? = null
+
     /**
      * Starts observing the NetScope repository and posts/updates a notification
      * whenever the transaction list changes.
@@ -55,14 +52,17 @@ object NetScopeNotificationManager {
      * @param context       Any context; the application context is used internally.
      * @param launchActivity Optional [Activity] class to open when the notification
      *                       is tapped (e.g. `NetScopeActivity::class.java`).
+     *
+     * Idempotent and thread-safe: repeated calls while active are ignored.
+     * After [dismiss], calling it again restarts updates.
      */
+    @Synchronized
     fun init(context: Context, launchActivity: Class<out Activity>? = null) {
         check(NetScope.isInitialized()) {
             "NetScopeNotificationManager.init() must be called after NetScope.interceptor(context). " +
                     "Make sure your OkHttpClient (and its interceptor) is built before initialising the notification."
         }
-        if (initialized) return
-        initialized = true
+        if (collectJob?.isActive == true) return
 
         val appContext = context.applicationContext
         createChannel(appContext)
@@ -79,17 +79,22 @@ object NetScopeNotificationManager {
             )
         }
 
-        scope.launch {
-            NetScope.repository.observeAll().collect { transactions ->
-                post(appContext, transactions, tapPendingIntent)
-            }
+        collectJob = scope.launch {
+            NetScope.repository.observeAll()
+                .map { it.toStats() }
+                // The list re-emits on every row write (insert, response, timing) — only
+                // re-post when what the notification shows actually changed.
+                .distinctUntilChanged()
+                .collect { stats -> post(appContext, stats, tapPendingIntent) }
         }
     }
 
-    /** Cancels the notification and stops future updates. */
+    /** Stops future updates and cancels the notification. */
+    @Synchronized
     fun dismiss(context: Context) {
+        collectJob?.cancel()
+        collectJob = null
         NotificationManagerCompat.from(context.applicationContext).cancel(NOTIFICATION_ID)
-        initialized = false
     }
 
     // ── Internals ──────────────────────────────────────────────────────────────
@@ -104,28 +109,33 @@ object NetScopeNotificationManager {
         NotificationManagerCompat.from(context).createNotificationChannel(channel)
     }
 
-    private fun post(
-        context: Context,
-        transactions: List<NetTransaction>,
-        tapIntent: PendingIntent?,
-    ) {
+    /** The values the notification renders; compared to skip identical re-posts. */
+    private data class Stats(val total: Int, val errors: Int, val lastCode: Int?)
+
+    private fun List<NetTransaction>.toStats() = Stats(
+        total = size,
+        errors = count {
+            it.statusClass == NetTransaction.StatusClass.CLIENT_ERROR ||
+                    it.statusClass == NetTransaction.StatusClass.SERVER_ERROR ||
+                    it.statusClass == NetTransaction.StatusClass.ERROR
+        },
+        lastCode = firstOrNull()?.responseCode,
+    )
+
+    private fun post(context: Context, stats: Stats, tapIntent: PendingIntent?) {
         // Respect the user's notification style preference.
         when (NetScope.notificationStyle) {
             NotificationStyle.NONE -> {
                 NotificationManagerCompat.from(context).cancel(NOTIFICATION_ID)
                 return
             }
-            NotificationStyle.MINIMAL -> postMinimal(context, transactions, tapIntent)
-            NotificationStyle.DETAILED -> postDetailed(context, transactions, tapIntent)
+            NotificationStyle.MINIMAL -> postMinimal(context, stats, tapIntent)
+            NotificationStyle.DETAILED -> postDetailed(context, stats, tapIntent)
         }
     }
 
-    private fun postMinimal(
-        context: Context,
-        transactions: List<NetTransaction>,
-        tapIntent: PendingIntent?,
-    ) {
-        val total = transactions.size
+    private fun postMinimal(context: Context, stats: Stats, tapIntent: PendingIntent?) {
+        val total = stats.total
         val title = "$total request${if (total != 1) "s" else ""} captured"
 
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
@@ -141,18 +151,8 @@ object NetScopeNotificationManager {
         NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, notification)
     }
 
-    private fun postDetailed(
-        context: Context,
-        transactions: List<NetTransaction>,
-        tapIntent: PendingIntent?,
-    ) {
-        val total = transactions.size
-        val errors = transactions.count {
-            it.statusClass == NetTransaction.StatusClass.CLIENT_ERROR ||
-                    it.statusClass == NetTransaction.StatusClass.SERVER_ERROR ||
-                    it.statusClass == NetTransaction.StatusClass.ERROR
-        }
-        val lastCode = transactions.firstOrNull()?.responseCode
+    private fun postDetailed(context: Context, stats: Stats, tapIntent: PendingIntent?) {
+        val (total, errors, lastCode) = stats
 
         val title = "$total request${if (total != 1) "s" else ""} captured"
         val text = buildString {
