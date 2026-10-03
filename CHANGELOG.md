@@ -22,11 +22,23 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 - **Export (security)** — cURL export shell-quotes the method, URL, every header and the body, so a `'` in captured data can no longer inject shell commands.
 - **Export** — HAR `creator.version` reports the real library version instead of a hard-coded `0.3.1`.
 - **Performance** — heavy body formatting, stats and HAR generation moved off the main thread.
+- **Timing** — the Timing tab no longer crashes on 0 ms phases, and TLS time is no longer double-counted in the timeline total.
+- **Export** — HAR and full-summary sharing go through a file (FileProvider) instead of `EXTRA_TEXT`, so large captures no longer throw `TransactionTooLargeException`; exporting the visible list loads only those rows.
+- **Search** — search is debounced, and header search matches real header values (headers are stored without Gson HTML escaping; DB v4 adds a plain-text header search column, migrated from v3).
+- **UI** — the detail screen keeps its top bar and shows "no longer available" when the row is pruned; no stale or blank frames when switching transactions.
+- **Stats** — pending requests are no longer counted as fast, failed requests have a duration, and the screen shows a filter indicator and a filter-aware empty state.
+- **Capture** — response body size reflects the bytes actually read for chunked/gzip responses.
+- **Init** — fixed a race where `ensureInitialized` could replace the host's redaction config.
+- **Settings** — opening Settings no longer overrides a notification style set in code; the style is only written when the user picks one.
 
 ### Changed
 - **`netscope-no-op` API parity (security)** — the release artifact now mirrors core's public API: `mockInterceptor()`, `mockRules`, `add/update/delete/toggleMockRule`, `config`, `updateConfig`, `ensureInitialized`, plus `MockRule` and `NetScopeConfig`. Release variants that use mocks now compile against no-op, so there's no reason to ship core (which writes production bodies to disk) in release. No-op now depends on `kotlinx-coroutines-core` (for the `mockRules` `StateFlow`).
+- **`TransactionRepository`** — `observeAll()` is deprecated and again returns bodies; use the new `observeSummaries()` for list screens.
 
 ### Added
+- `NetScopeExporter.shareAsFile` — shares an export as a file through NetScope's FileProvider.
+- `TransactionRepository.observeSummaries()`, `getByIds` and `updateResponseSize`.
+- `netscope-no-op` gains `NetScopeSettings` (defaults only, nothing persisted) for release parity.
 - Unit and Robolectric integration tests, and a pull-request CI workflow (`testDebugUnitTest assembleDebug`).
 
 ---
