@@ -143,6 +143,23 @@ class NetScopeInterceptorTest {
         assertEquals(NetTransaction.StatusClass.ERROR, recorded.statusClass)
     }
 
+    @Test
+    fun `failed call records its duration`() {
+        val client = client {
+            Thread.sleep(20)
+            throw java.net.SocketTimeoutException("timeout")
+        }
+
+        assertThrows(java.net.SocketTimeoutException::class.java) {
+            client.newCall(Request.Builder().url(url).build()).execute()
+        }
+
+        val stored = repo.row(1)!!
+        assertEquals(NetTransaction.StatusClass.ERROR, stored.statusClass)
+        assertNotNull(stored.durationMs)
+        assertTrue("duration ${stored.durationMs}", stored.durationMs!! >= 20)
+    }
+
     // ── Response body ─────────────────────────────────────────────────────────
 
     @Test
@@ -203,6 +220,68 @@ class NetScopeInterceptorTest {
         client.newCall(Request.Builder().url(url).build()).execute().close()
 
         assertEquals(600L, lastRecorded().responseBodySize)
+        assertTrue(repo.sizeUpdates.isEmpty())
+    }
+
+    // ── Response size without Content-Length ──────────────────────────────────
+
+    /** A body with no Content-Length, like a chunked or transparently gunzipped response. */
+    private fun chunked(bytes: ByteArray): ResponseBody = Buffer().write(bytes).asResponseBody(JSON, -1)
+
+    @Test
+    fun `unknown-length response records the bytes the app read, not the capture size`() {
+        val payload = ByteArray(5 * 1024 * 1024) { 'a'.code.toByte() }
+        val client = client(NetScopeConfig(maxBodySize = 1_000)) { ok(it, chunked(payload)) }
+
+        client.newCall(Request.Builder().url(url).build()).execute().use { response ->
+            assertEquals(-1L, response.body.contentLength())
+            assertEquals(JSON, response.body.contentType())
+            // Provisional value until the app reads the body: the capture size.
+            assertEquals(1_000L, repo.row(1)!!.responseBodySize)
+            assertEquals(payload.size, response.body.bytes().size)
+        }
+
+        assertEquals(listOf(1L to payload.size.toLong()), repo.sizeUpdates)
+        assertEquals(payload.size.toLong(), repo.row(1)!!.responseBodySize)
+        assertEquals(1_000, repo.row(1)!!.responseBody!!.length)
+    }
+
+    @Test
+    fun `unknown-length response closed unread records zero bytes once`() {
+        val client = client(NetScopeConfig(maxBodySize = 1_000)) { ok(it, chunked(ByteArray(50_000))) }
+
+        val response = client.newCall(Request.Builder().url(url).build()).execute()
+        response.close()
+        response.close()
+
+        // Peeked bytes are not counted: only what the app pulled through the body (nothing).
+        assertEquals(listOf(1L to 0L), repo.sizeUpdates)
+        assertEquals(0L, repo.row(1)!!.responseBodySize)
+    }
+
+    @Test
+    fun `unknown-length response partially read then closed records bytes read so far`() {
+        val client = client(NetScopeConfig(maxBodySize = 1_000)) { ok(it, chunked(ByteArray(500_000))) }
+
+        client.newCall(Request.Builder().url(url).build()).execute().use { response ->
+            response.body.source().readByteArray(100_000)
+        }
+
+        // Counted at the source level, so the figure is >= what the app consumed (buffer granularity).
+        val (id, bytes) = repo.sizeUpdates.single()
+        assertEquals(1L, id)
+        assertTrue("bytes=$bytes", bytes in 100_000L until 500_000L)
+    }
+
+    @Test
+    fun `known Content-Length is stored directly and the body is not wrapped`() {
+        val payload = "x".repeat(10_000)
+        val client = client(NetScopeConfig(maxBodySize = 100)) { ok(it, payload.toResponseBody(TEXT)) }
+
+        client.newCall(Request.Builder().url(url).build()).execute().use { assertEquals(payload, it.body.string()) }
+
+        assertEquals(10_000L, repo.row(1)!!.responseBodySize)
+        assertTrue(repo.sizeUpdates.isEmpty())
     }
 
     private companion object {

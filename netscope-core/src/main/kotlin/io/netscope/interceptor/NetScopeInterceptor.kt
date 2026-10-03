@@ -7,21 +7,27 @@ import io.netscope.model.NetTransaction
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import okhttp3.Headers
 import okhttp3.Interceptor
 import okhttp3.Request
+import okhttp3.MediaType
 import okhttp3.Response
+import okhttp3.ResponseBody
 import okhttp3.internal.http.promisesBody
 import okio.Buffer
+import okio.BufferedSource
+import okio.ForwardingSource
 import okio.GzipSource
 import okio.Sink
 import okio.Timeout
 import okio.buffer
 import okio.utf8Size
 import java.io.EOFException
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * OkHttp [Interceptor] that captures every request/response and stores it
@@ -35,6 +41,10 @@ import java.io.EOFException
  * Capture never changes what the app or the server sees: request bodies are
  * copied through a size-capped sink (one-shot and duplex bodies are skipped),
  * and response bodies are peeked from the source buffer, never consumed.
+ *
+ * When the response has no Content-Length (chunked, or gunzipped transparently by OkHttp) the
+ * body handed back to the app counts the bytes it reads, and the stored size is corrected once
+ * the body is exhausted or closed.
  */
 class NetScopeInterceptor internal constructor(
     private val repository: TransactionRepository,
@@ -78,10 +88,13 @@ class NetScopeInterceptor internal constructor(
         val response = try {
             chain.proceed(request)
         } catch (e: Exception) {
+            val failedAt = System.currentTimeMillis()
             saveAsync(
                 transaction.copy(
                     id = transactionId,
-                    responseDate = System.currentTimeMillis(),
+                    responseDate = failedAt,
+                    // Timeouts must count towards avg / p95 / slowest, not fall into "<100ms".
+                    durationMs = failedAt - requestDate,
                     error = e.message ?: e.javaClass.simpleName,
                 )
             )
@@ -90,12 +103,16 @@ class NetScopeInterceptor internal constructor(
 
         // ── Capture response ─────────────────────────────────────────────
         val responseDate = System.currentTimeMillis()
-        val responseBodyString = if (response.promisesBody()) {
+        val promisesBody = response.promisesBody()
+        val responseBodyString = if (promisesBody) {
             response.readBodyAsString(config.maxBodySize, config.alwaysReadResponseBody)
         } else null
         val contentLength = response.body.contentLength()
+        // Chunked or transparently-gunzipped (BridgeInterceptor reports -1): the real size is only
+        // known once the app has read the body, so it is counted and written afterwards.
+        val sizeUnknown = promisesBody && contentLength < 0
 
-        saveAsync(
+        val responseSaved = saveAsync(
             transaction.copy(
                 id = transactionId,
                 responseDate = responseDate,
@@ -105,11 +122,22 @@ class NetScopeInterceptor internal constructor(
                 responseHeaders = response.headers.toNetHeaders(config.redactedLowercase),
                 responseBody = responseBodyString,
                 responseContentType = response.body.contentType()?.toString(),
-                // Bytes on the wire when known — never the length of the truncated capture.
+                // Content-Length when known. Otherwise a provisional value — the size of the
+                // (possibly truncated) capture — replaced by the bytes the app actually read
+                // once it exhausts or closes the body (see CountingResponseBody).
                 responseBodySize = if (contentLength >= 0) contentLength else responseBodyString?.utf8Size() ?: 0L,
             )
         )
-        return response
+        if (!sizeUnknown) return response
+
+        val counted = CountingResponseBody(response.body) { bytes ->
+            scope.launch {
+                // Never let the full update (with the provisional size) land after the real one.
+                responseSaved.join()
+                repository.updateResponseSize(transactionId, bytes)
+            }
+        }
+        return response.newBuilder().body(counted).build()
     }
 
     // ─── Persistence helpers ──────────────────────────────────────────────────
@@ -119,9 +147,8 @@ class NetScopeInterceptor internal constructor(
         // before the network call returns so the UI reflects "pending".
         runBlocking(ioDispatcher) { repository.insert(transaction) }
 
-    private fun saveAsync(transaction: NetTransaction) {
+    private fun saveAsync(transaction: NetTransaction): Job =
         scope.launch { repository.update(transaction) }
-    }
 
     // ─── Extension helpers ────────────────────────────────────────────────────
 
@@ -224,4 +251,51 @@ private class CappedSink(private val target: Buffer, private val cap: Long) : Si
     override fun timeout(): Timeout = Timeout.NONE
 
     override fun close() = Unit
+}
+
+// ── Counting response body ────────────────────────────────────────────────────
+
+/**
+ * Forwards [delegate] unchanged while counting the bytes the app reads. [onComplete] runs exactly
+ * once with that count, when the source is exhausted or closed — whichever happens first. A body
+ * closed without being read reports the bytes read so far (0 if none).
+ *
+ * Wraps the original source, so bytes the interceptor only peeked are counted once, when the app
+ * reads them. [contentType] and [contentLength] delegate to the original body.
+ */
+private class CountingResponseBody(
+    private val delegate: ResponseBody,
+    private val onComplete: (Long) -> Unit,
+) : ResponseBody() {
+
+    private val reported = AtomicBoolean(false)
+    @Volatile private var bytesRead = 0L
+
+    private val counting: BufferedSource = object : ForwardingSource(delegate.source()) {
+        override fun read(sink: Buffer, byteCount: Long): Long {
+            val read = super.read(sink, byteCount)
+            if (read == -1L) report() else bytesRead += read
+            return read
+        }
+
+        override fun close() {
+            try {
+                super.close()
+            } finally {
+                report()
+            }
+        }
+    }.buffer()
+
+    private fun report() {
+        if (reported.compareAndSet(false, true)) onComplete(bytesRead)
+    }
+
+    override fun contentType(): MediaType? = delegate.contentType()
+
+    override fun contentLength(): Long = delegate.contentLength()
+
+    override fun source(): BufferedSource = counting
+
+    override fun close() = counting.close()
 }

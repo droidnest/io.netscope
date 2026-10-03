@@ -13,6 +13,7 @@ internal class FakeTransactionRepository : TransactionRepository {
 
     val inserted = CopyOnWriteArrayList<NetTransaction>()
     val updated = CopyOnWriteArrayList<NetTransaction>()
+    val sizeUpdates = CopyOnWriteArrayList<Pair<Long, Long>>()
 
     private val nextId = AtomicLong(1)
     private val rows = MutableStateFlow<Map<Long, NetTransaction>>(emptyMap())
@@ -27,12 +28,26 @@ internal class FakeTransactionRepository : TransactionRepository {
         return id
     }
 
+    /** Like the Room implementation, writes only the response columns onto the stored row. */
     override suspend fun update(transaction: NetTransaction) {
         updated += transaction
-        rows.value = rows.value + (transaction.id to transaction)
+        val row = rows.value[transaction.id] ?: return
+        rows.value = rows.value + (
+            transaction.id to row.copy(
+                responseDate = transaction.responseDate,
+                durationMs = transaction.durationMs,
+                responseCode = transaction.responseCode,
+                responseMessage = transaction.responseMessage,
+                responseHeaders = transaction.responseHeaders,
+                responseBody = transaction.responseBody,
+                responseContentType = transaction.responseContentType,
+                responseBodySize = transaction.responseBodySize,
+                error = transaction.error,
+            )
+        )
     }
 
-    override fun observeAll(query: String): Flow<List<NetTransaction>> =
+    override fun observeSummaries(query: String): Flow<List<NetTransaction>> =
         rows.map { all ->
             all.values
                 .filter { query.isEmpty() || it.url.contains(query, ignoreCase = true) }
@@ -46,6 +61,19 @@ internal class FakeTransactionRepository : TransactionRepository {
 
     override suspend fun getAllWithBodies(): List<NetTransaction> =
         rows.value.values.sortedByDescending { it.id }
+
+    @Deprecated("See TransactionRepository.observeAll")
+    override fun observeAll(): Flow<List<NetTransaction>> =
+        rows.map { all -> all.values.sortedByDescending { it.id } }
+
+    override suspend fun getByIds(ids: Collection<Long>): List<NetTransaction> =
+        getAllWithBodies().filter { it.id in ids }
+
+    override suspend fun updateResponseSize(id: Long, bytes: Long) {
+        sizeUpdates += id to bytes
+        val row = rows.value[id] ?: return
+        rows.value = rows.value + (id to row.copy(responseBodySize = bytes))
+    }
 
     override suspend fun updateTiming(id: Long, dnsMs: Long?, connectMs: Long?, sslMs: Long?, ttfbMs: Long?) {
         val row = rows.value[id] ?: return

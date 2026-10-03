@@ -99,9 +99,13 @@ object NetScope {
         block: ConfigBuilder.() -> Unit = {},
     ): NetScopeInterceptor {
         val config = ConfigBuilder().apply(block).build()
-        init(context.applicationContext, config)
-        // _config, not config: init() overlays the persisted Settings on top of the DSL values.
-        return NetScopeInterceptor(repository, _config).also { activeInterceptor = it }
+        // Init and construction share one lock so a concurrent ensureInitialized() can never slip
+        // its default config in between — the interceptor is built from exactly what init produced.
+        synchronized(this) {
+            // effective, not config: init() overlays the persisted Settings on top of the DSL values.
+            val (effective, repo) = init(context.applicationContext, config)
+            return NetScopeInterceptor(repo, effective).also { activeInterceptor = it }
+        }
     }
 
     /**
@@ -151,6 +155,7 @@ object NetScope {
      * NetScope.updateConfig { copy(maxTransactions = 1000) }
      * ```
      */
+    @Synchronized
     fun updateConfig(transform: NetScopeConfig.() -> NetScopeConfig) {
         if (!isInitialized()) return
         val newConfig = _config.transform()
@@ -162,29 +167,44 @@ object NetScope {
     // ── Internal ──────────────────────────────────────────────────────────────
 
 
-    @Synchronized
-    private fun init(context: Context, config: NetScopeConfig) {
+    /** Must be called while holding the [NetScope] lock. Returns the effective config and the new repository. */
+    private fun init(context: Context, config: NetScopeConfig): Pair<NetScopeConfig, TransactionRepository> {
         val db = NetScopeDatabase.getInstance(context)
         // Settings can only add redaction on top of what the code declares — never remove it.
         val settings = NetScopeSettings(context)
         val effective = settings.applyTo(config)
         settings.savedNotificationStyle?.let { notificationStyle = it }
+        val repo = TransactionRepositoryImpl(db.transactionDao(), effective)
         _config = effective
-        repository = TransactionRepositoryImpl(db.transactionDao(), effective)
+        repository = repo
         if (mockRuleStore == null) mockRuleStore = MockRuleStore(context)
         initialized = true
+        return effective to repo
     }
 
     /**
      * Initialises storage with default capture config if [interceptor] has not run yet.
      * Lets the inspector UI open after process death even when the host builds OkHttp lazily.
+     *
+     * No-op once anything initialised the library — in particular it never overwrites the
+     * host's [interceptor] DSL config. A later [interceptor] call still replaces these defaults.
      */
+    @Synchronized
     fun ensureInitialized(context: Context) {
-        if (!initialized) init(context.applicationContext, ConfigBuilder().build())
+        if (initialized) return
+        init(context.applicationContext, ConfigBuilder().build())
     }
 
     /** Returns true if [interceptor] or [ensureInitialized] has been called at least once. */
     fun isInitialized(): Boolean = initialized
+
+    /** Clears global state so each test starts uninitialised. */
+    @Synchronized
+    internal fun resetForTests() {
+        initialized = false
+        activeInterceptor = null
+        mockRuleStore = null
+    }
 
     // ── DSL Builder ───────────────────────────────────────────────────────────
 
