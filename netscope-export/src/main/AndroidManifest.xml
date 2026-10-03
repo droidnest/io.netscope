@@ -1,2 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android" />
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application>
+        <!-- Serves export files (HAR, summaries) to share targets without hitting the ~1 MB Binder limit. -->
+        <provider
+            android:name="io.netscope.export.NetScopeFileProvider"
+            android:authorities="${applicationId}.netscope.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/netscope_file_paths" />
+        </provider>
+    </application>
+
+</manifest>

@@ -4,9 +4,11 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import androidx.core.content.FileProvider
 import com.google.gson.GsonBuilder
 import io.netscope.model.NetHeader
 import io.netscope.model.NetTransaction
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -226,6 +228,37 @@ object NetScopeExporter {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         })
     }
+
+    /**
+     * Writes [content] to `cacheDir/netscope/[fileName]` and opens the share sheet with a
+     * `content://` URI. Use this instead of [share] for anything that can exceed a few hundred
+     * KB (HAR, full summaries): `EXTRA_TEXT` travels through Binder and crashes above ~1 MB.
+     *
+     * Performs file I/O — call it off the main thread.
+     */
+    fun shareAsFile(
+        context: Context,
+        content: String,
+        fileName: String,
+        mimeType: String = "application/json",
+        chooserTitle: String = "Share via",
+    ) {
+        val dir = File(context.cacheDir, EXPORT_DIR).apply { mkdirs() }
+        val file = File(dir, fileName).apply { writeText(content) }
+        val uri = FileProvider.getUriForFile(context, "${context.packageName}$AUTHORITY_SUFFIX", file)
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = mimeType
+            putExtra(Intent.EXTRA_STREAM, uri)
+            clipData = ClipData.newRawUri(fileName, uri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        context.startActivity(Intent.createChooser(intent, chooserTitle).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        })
+    }
+
+    private const val EXPORT_DIR = "netscope"
+    private const val AUTHORITY_SUFFIX = ".netscope.fileprovider"
 
     // ── Private helpers ───────────────────────────────────────────────────────
 

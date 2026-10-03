@@ -38,6 +38,7 @@ android {
 dependencies {
     api(project(":netscope-core"))
     implementation(libs.gson)
+    implementation(libs.core.ktx) // FileProvider for file-based sharing
 
     // Tests
     testImplementation(libs.junit)
