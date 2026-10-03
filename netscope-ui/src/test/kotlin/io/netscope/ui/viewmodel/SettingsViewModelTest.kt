@@ -8,6 +8,7 @@ import io.netscope.NotificationStyle
 import io.netscope.ui.preferences.NetScopePreferences
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -36,13 +37,17 @@ class SettingsViewModelTest {
         netScopePreferences = NetScopePreferences(context)
     }
 
-    private fun createViewModel(activeConfig: NetScopeConfig? = null) = SettingsViewModel(
-        netScopeSettings         = netScopeSettings,
-        netScopePreferences      = netScopePreferences,
-        configUpdater            = { transform -> liveConfig = liveConfig.transform() },
-        shakeEnabledUpdater      = { shakeEnabled = it },
-        notificationStyleUpdater = { notificationStyle = it },
-        activeConfigProvider     = { activeConfig },
+    private fun createViewModel(
+        activeConfig: NetScopeConfig? = null,
+        activeNotificationStyle: NotificationStyle = NotificationStyle.DETAILED,
+    ) = SettingsViewModel(
+        netScopeSettings                = netScopeSettings,
+        netScopePreferences             = netScopePreferences,
+        configUpdater                   = { transform -> liveConfig = liveConfig.transform() },
+        shakeEnabledUpdater             = { shakeEnabled = it },
+        notificationStyleUpdater        = { notificationStyle = it },
+        activeConfigProvider            = { activeConfig },
+        activeNotificationStyleProvider = { activeNotificationStyle },
     )
 
     // ── Privacy ───────────────────────────────────────────────────────────────
@@ -141,6 +146,32 @@ class SettingsViewModelTest {
         assertEquals(NotificationStyle.MINIMAL, notificationStyle)
     }
 
+    @Test
+    fun `opening settings does not override a notification style set in code`() {
+        // Given — host set NotificationStyle.NONE in code; the user never picked a style in Settings.
+
+        // When
+        val viewModel = createViewModel(activeNotificationStyle = NotificationStyle.NONE)
+
+        // Then
+        assertNull(notificationStyle)
+        assertEquals(NotificationStyle.NONE, viewModel.uiState.value.notificationStyle)
+    }
+
+    @Test
+    fun `picking a notification style persists and pushes it`() {
+        // Given
+        val viewModel = createViewModel(activeNotificationStyle = NotificationStyle.NONE)
+
+        // When
+        viewModel.onNotificationStyleSelected(NotificationStyle.MINIMAL)
+
+        // Then
+        assertEquals(NotificationStyle.MINIMAL, NetScopePreferences(context).notificationStyle)
+        assertEquals(NotificationStyle.MINIMAL, notificationStyle)
+        assertEquals(NotificationStyle.MINIMAL, viewModel.uiState.value.notificationStyle)
+    }
+
     // ── Restore ───────────────────────────────────────────────────────────────
 
     @Test
@@ -156,14 +187,15 @@ class SettingsViewModelTest {
         }
         notificationStyle = null
 
-        // When
+        // When — core's init has restored the saved style into the runtime.
         val state = SettingsViewModel(
-            netScopeSettings         = NetScopeSettings(context),
-            netScopePreferences      = NetScopePreferences(context),
-            configUpdater            = {},
-            shakeEnabledUpdater      = {},
-            notificationStyleUpdater = { notificationStyle = it },
-            activeConfigProvider     = { null },
+            netScopeSettings                = NetScopeSettings(context),
+            netScopePreferences             = NetScopePreferences(context),
+            configUpdater                   = {},
+            shakeEnabledUpdater             = {},
+            notificationStyleUpdater        = { notificationStyle = it },
+            activeConfigProvider            = { null },
+            activeNotificationStyleProvider = { NotificationStyle.NONE },
         ).uiState.value
 
         // Then
@@ -173,8 +205,8 @@ class SettingsViewModelTest {
         assertTrue("x-token" in state.redactedHeaders)
         assertFalse(state.shakeToOpen)
         assertEquals(NotificationStyle.NONE, state.notificationStyle)
-        // Persisted notification style is re-applied to the runtime.
-        assertEquals(NotificationStyle.NONE, notificationStyle)
+        // The screen only reads the runtime style; it never re-pushes it.
+        assertNull(notificationStyle)
     }
 
     @Test

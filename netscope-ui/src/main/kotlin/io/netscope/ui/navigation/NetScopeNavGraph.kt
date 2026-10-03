@@ -102,6 +102,13 @@ fun NetScopeNavGraph(
     val currentRoute = navBackStackEntry?.destination?.route
     val showBottomNav = currentRoute in PRIMARY_ROUTES
 
+    // Select before navigating so the detail's first frame is already Loading for the new id,
+    // never the previously selected transaction.
+    val openDetail: (Long) -> Unit = { id ->
+        viewModel.selectTransaction(id)
+        navController.navigate("detail/$id")
+    }
+
     Scaffold(
         // Outer scaffold only owns the bottom nav — status bar insets are handled
         // by each screen's own TopAppBar, so we zero out the outer content insets
@@ -132,7 +139,7 @@ fun NetScopeNavGraph(
             composable(ROUTE_LIST) {
                 TransactionListScreen(
                     viewModel          = viewModel,
-                    onTransactionClick = { id -> navController.navigate("detail/$id") },
+                    onTransactionClick = { id -> openDetail(id) },
                 )
             }
 
@@ -148,7 +155,7 @@ fun NetScopeNavGraph(
             composable(ROUTE_STATS) {
                 StatsScreen(
                     viewModel          = viewModel,
-                    onTransactionClick = { id -> navController.navigate("detail/$id") },
+                    onTransactionClick = { id -> openDetail(id) },
                 )
             }
 
@@ -167,17 +174,17 @@ fun NetScopeNavGraph(
                 route     = ROUTE_DETAIL,
                 arguments = listOf(navArgument("transactionId") { type = NavType.LongType }),
             ) { backStack ->
-                // The nav arg is the source of truth so the screen survives process death.
+                // Selection normally happens in openDetail; this only restores it after process
+                // death (the nav arg survives, the ViewModel does not). No-op when already selected.
                 val transactionId = backStack.arguments?.getLong("transactionId")
                 LaunchedEffect(transactionId) {
                     transactionId?.let(viewModel::selectTransaction)
                 }
+                // No clearSelection() on back: it would blank the screen during the pop animation.
+                // The row stops being observed 5 s after the screen leaves (see detailState).
                 TransactionDetailScreen(
                     viewModel = viewModel,
-                    onBack    = {
-                        viewModel.clearSelection()
-                        navController.popBackStack()
-                    },
+                    onBack    = { navController.popBackStack() },
                 )
             }
 

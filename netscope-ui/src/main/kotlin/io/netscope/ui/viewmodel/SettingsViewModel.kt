@@ -44,15 +44,11 @@ class SettingsViewModel(
     private val shakeEnabledUpdater: (Boolean) -> Unit = NetScope::setShakeEnabled,
     private val notificationStyleUpdater: (NotificationStyle) -> Unit = { NetScope.notificationStyle = it },
     activeConfigProvider: () -> NetScopeConfig? = { if (NetScope.isInitialized()) NetScope.config else null },
+    activeNotificationStyleProvider: () -> NotificationStyle = { NetScope.notificationStyle },
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(initialState(activeConfigProvider()))
+    private val _uiState = MutableStateFlow(initialState(activeConfigProvider(), activeNotificationStyleProvider()))
     val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
-
-    init {
-        // Core does not restore the notification style on launch — make the runtime agree with what the screen shows.
-        notificationStyleUpdater(_uiState.value.notificationStyle)
-    }
 
     // ── Capture ───────────────────────────────────────────────────────────────
 
@@ -117,14 +113,19 @@ class SettingsViewModel(
 
     // ── Internal ──────────────────────────────────────────────────────────────
 
-    /** Capture values come from the running config when available (it already includes persisted overrides). */
-    private fun initialState(activeConfig: NetScopeConfig?) = SettingsUiState(
+    /**
+     * Capture values come from the running config when available (it already includes persisted overrides).
+     * The notification style is read from the runtime, never pushed to it: core's `init` already restores a
+     * style saved here, and otherwise the host's in-code choice must win — prefs and runtime are only written
+     * when the user picks a style.
+     */
+    private fun initialState(activeConfig: NetScopeConfig?, activeNotificationStyle: NotificationStyle) = SettingsUiState(
         maxTransactions        = activeConfig?.maxTransactions ?: netScopeSettings.maxTransactions,
         maxBodySizeBytes       = activeConfig?.maxBodySize ?: netScopeSettings.maxBodySizeBytes,
         alwaysReadResponseBody = activeConfig?.alwaysReadResponseBody ?: netScopeSettings.alwaysReadResponseBody,
         redactedHeaders        = netScopeSettings.redactedHeaders,
         shakeToOpen            = netScopePreferences.shakeToOpen,
-        notificationStyle      = netScopePreferences.notificationStyle,
+        notificationStyle      = activeNotificationStyle,
     )
 
     // ── Factory ───────────────────────────────────────────────────────────────

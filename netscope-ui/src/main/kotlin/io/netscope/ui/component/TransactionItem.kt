@@ -240,11 +240,17 @@ fun Long.formatBytes(): String = when {
     else                       -> "${"%.1f".format(this / (1_024.0 * 1_024.0))}MB"
 }
 
-/** Colours duration: green ≤300ms, amber ≤1s, red >1s. */
-private fun durationColor(ms: Long): Color = when {
-    ms <= 300  -> ColorSuccess.copy(alpha = 0.85f)
-    ms <= 1000 -> ColorAmber
-    else       -> ColorError
+/** Below this a request is "fast" (green). Shared by the list, stats buckets and detail screen. */
+internal const val DURATION_FAST_MS = 300L
+
+/** At or above this a request is "slow" (red); in between is amber. */
+internal const val DURATION_SLOW_MS = 1_000L
+
+/** Single source of truth for duration colours: green < 300 ms, amber < 1 s, red ≥ 1 s. */
+internal fun durationColor(ms: Long): Color = when {
+    ms < DURATION_FAST_MS -> ColorSuccess
+    ms < DURATION_SLOW_MS -> ColorAmber
+    else                  -> ColorError
 }
 
 /** Subtle dot used as a separator between stat chips. */

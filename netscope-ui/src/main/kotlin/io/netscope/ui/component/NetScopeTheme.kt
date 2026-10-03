@@ -103,7 +103,7 @@ val NetScopeDropdown: Color        @Composable get() = LocalNetScopeColors.curre
 // ── Semantic colors (same across themes) ──────────────────────────────────────
 
 val ColorSuccess  = Color(0xFF00D98A)  // Green  — 2xx, live dot
-val ColorAmber    = Color(0xFFF5A623)  // Amber  — 3xx, 4xx, slow >300ms
+val ColorAmber    = Color(0xFFF5A623)  // Amber  — 3xx, 4xx, slow 300ms–1s
 val ColorWarning  = ColorAmber         // alias
 val ColorError    = Color(0xFFF04E6A)  // Red    — 5xx, destructive
 val ColorRedirect = ColorAmber         // 3xx = Amber per design spec

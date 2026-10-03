@@ -5,6 +5,8 @@ import io.netscope.model.NetTransaction
 import io.netscope.ui.component.ColorAmber
 import io.netscope.ui.component.ColorError
 import io.netscope.ui.component.ColorSuccess
+import io.netscope.ui.component.DURATION_FAST_MS
+import io.netscope.ui.component.DURATION_SLOW_MS
 
 // ── Stats model ───────────────────────────────────────────────────────────────
 
@@ -20,7 +22,10 @@ internal data class StatsData(
     val totalBytes: Long,
     val methodCounts: List<Pair<String, Int>>,
     val statusClassCounts: List<Pair<NetTransaction.StatusClass, Int>>,
+    /** Only rows with a duration (completed or failed); pending rows are excluded. */
     val durationBuckets: List<DurationBucket>,
+    /** Number of rows bucketed in [durationBuckets] — the denominator for their percentages. */
+    val timedCount: Int,
     val slowestRequests: List<NetTransaction>,
     val topHosts: List<Pair<String, Int>>,
     val p50Ms: Long?,
@@ -60,16 +65,16 @@ internal data class StatsData(
                 .sortedByDescending { it.value }
                 .map { it.key to it.value }
 
-            // Duration buckets
-            val b0   = txList.count { (it.durationMs ?: 0L) < 100L }
-            val b100 = txList.count { (it.durationMs ?: 0L) in 100L..299L }
-            val b300 = txList.count { (it.durationMs ?: 0L) in 300L..999L }
-            val b1s  = txList.count { (it.durationMs ?: 0L) >= 1000L }
+            // Duration buckets — pending rows have no duration and must not land in "< 100ms".
+            val b0   = durations.count { it < FAST_BUCKET_MS }
+            val b100 = durations.count { it in FAST_BUCKET_MS until DURATION_FAST_MS }
+            val b300 = durations.count { it in DURATION_FAST_MS until DURATION_SLOW_MS }
+            val b1s  = durations.count { it >= DURATION_SLOW_MS }
             val buckets = listOf(
                 DurationBucket("< 100ms",   b0,   ColorSuccess),
                 DurationBucket("100–300ms", b100, ColorSuccess.copy(alpha = 0.7f)),
                 DurationBucket("300ms–1s",  b300, ColorAmber),
-                DurationBucket("> 1s",      b1s,  ColorError),
+                DurationBucket("≥ 1s",      b1s,  ColorError),
             ).filter { it.count > 0 }
 
             // Slowest 5 completed
@@ -95,6 +100,7 @@ internal data class StatsData(
                 methodCounts      = methodCounts,
                 statusClassCounts = statusCounts,
                 durationBuckets   = buckets,
+                timedCount        = durations.size,
                 slowestRequests   = slowest,
                 topHosts          = topHosts,
                 p50Ms             = p50,
@@ -102,9 +108,41 @@ internal data class StatsData(
             )
         }
 
+        private const val FAST_BUCKET_MS = 100L
+
         private fun empty() = StatsData(0, 0f, 0, null, 0L, emptyList(),
-            emptyList(), emptyList(), emptyList(), emptyList(), null, null)
+            emptyList(), emptyList(), 0, emptyList(), emptyList(), null, null)
     }
 }
 
 internal data class DurationBucket(val label: String, val count: Int, val color: Color)
+
+/**
+ * The list filter that [StatsData] was computed under (the Stats tab mirrors the Requests list).
+ * Sort order is ignored: it does not change the aggregates.
+ */
+internal data class StatsFilter(
+    val query: String = "",
+    val methods: Set<String> = emptySet(),
+    val statusClasses: Set<NetTransaction.StatusClass> = emptySet(),
+) {
+    val isFiltered: Boolean
+        get() = query.isNotBlank() || methods.isNotEmpty() || statusClasses.isNotEmpty()
+
+    /** Short human-readable summary, e.g. `"api" · GET, POST · 4xx`. Empty when not filtered. */
+    val description: String
+        get() = listOfNotNull(
+            query.takeIf { it.isNotBlank() }?.let { "\"$it\"" },
+            methods.takeIf { it.isNotEmpty() }?.sorted()?.joinToString(", "),
+            statusClasses.takeIf { it.isNotEmpty() }?.sortedBy { it.ordinal }?.joinToString(", ") { it.shortLabel() },
+        ).joinToString(" · ")
+}
+
+private fun NetTransaction.StatusClass.shortLabel(): String = when (this) {
+    NetTransaction.StatusClass.SUCCESS      -> "2xx"
+    NetTransaction.StatusClass.REDIRECT     -> "3xx"
+    NetTransaction.StatusClass.CLIENT_ERROR -> "4xx"
+    NetTransaction.StatusClass.SERVER_ERROR -> "5xx"
+    NetTransaction.StatusClass.ERROR        -> "ERR"
+    NetTransaction.StatusClass.PENDING      -> "Pending"
+}

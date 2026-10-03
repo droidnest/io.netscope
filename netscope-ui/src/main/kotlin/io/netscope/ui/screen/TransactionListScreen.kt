@@ -49,6 +49,8 @@ import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Sort
 import androidx.compose.ui.platform.LocalContext
 import io.netscope.export.NetScopeExporter
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -123,13 +125,18 @@ fun TransactionListScreen(
     val context = LocalContext.current
 
     // HAR documents are built off the main thread in the ViewModel and delivered once.
-    LaunchedEffect(viewModel) {
-        viewModel.harExports.collect { har ->
-            NetScopeExporter.share(
-                context      = context,
-                text         = har,
-                chooserTitle = "Export as HAR",
-            )
+    // Shared as a file: a HAR easily exceeds the ~1 MB Binder limit of EXTRA_TEXT.
+    LaunchedEffect(viewModel, context) {
+        viewModel.harExports.collect { export ->
+            withContext(Dispatchers.IO) {
+                NetScopeExporter.shareAsFile(
+                    context      = context,
+                    content      = export.content,
+                    fileName     = export.fileName,
+                    mimeType     = "application/json",
+                    chooserTitle = "Export as HAR",
+                )
+            }
         }
     }
     var sortMenuExpanded by remember { mutableStateOf(false) }

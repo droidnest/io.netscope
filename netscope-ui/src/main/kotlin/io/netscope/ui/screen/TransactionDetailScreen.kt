@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -32,6 +33,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -48,6 +50,7 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRowDefaults
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -57,6 +60,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -68,6 +72,7 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -83,6 +88,7 @@ import io.netscope.ui.component.NetScopeCode
 import io.netscope.ui.component.NetScopeDarkBackground
 import io.netscope.ui.component.NetScopeDropdown
 import io.netscope.ui.component.NetScopeMuted
+import io.netscope.ui.component.durationColor
 import io.netscope.ui.component.NetScopeOnSurface
 import io.netscope.ui.component.ColorAmber
 import io.netscope.ui.component.ColorError
@@ -95,6 +101,8 @@ import io.netscope.ui.component.NetScopeText2
 import io.netscope.ui.component.StatusBadge
 import io.netscope.ui.component.color
 import io.netscope.ui.component.formatBytes
+import io.netscope.ui.viewmodel.DetailUiState
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -108,9 +116,15 @@ fun TransactionDetailScreen(
     viewModel: io.netscope.ui.viewmodel.NetScopeViewModel,
     onBack: () -> Unit,
 ) {
-    val transaction by viewModel.selectedTransaction.collectAsStateWithLifecycle()
-    var selectedTab by remember { mutableIntStateOf(0) }
-    var previousTab by remember { mutableIntStateOf(0) }
+    val detailState by viewModel.detailState.collectAsStateWithLifecycle()
+    val tx = (detailState as? DetailUiState.Loaded)?.transaction
+
+    // Hoisted above the state branch so re-emissions (or a transient Loading) don't reset them.
+    var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+    val overviewScroll = rememberScrollState()
+    val requestScroll  = rememberScrollState()
+    val responseScroll = rememberScrollState()
+    val timingScroll   = rememberScrollState()
     var overflowExpanded by remember { mutableStateOf(false) }
     val tabs = listOf("Overview", "Request", "Response", "Timing")
     val context = LocalContext.current
@@ -129,22 +143,44 @@ fun TransactionDetailScreen(
         }
     }
 
-    transaction?.let { tx ->
-        Scaffold(
-            snackbarHost = {
-                SnackbarHost(hostState = snackbarHostState) { data ->
-                    Snackbar(
-                        snackbarData = data,
-                        containerColor = NetScopeDropdown,
-                        contentColor = Color.White,
-                        actionColor = NetScopeAccent,
-                        shape = RoundedCornerShape(10.dp),
+    // Large payloads (HAR, full summary) go through a cache file: EXTRA_TEXT crashes above ~1 MB.
+    val shareAsFile: (String, String, String, () -> String) -> Unit = { fileName, mimeType, chooserTitle, content ->
+        snackbarScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    NetScopeExporter.shareAsFile(
+                        context = context,
+                        content = content(),
+                        fileName = fileName,
+                        mimeType = mimeType,
+                        chooserTitle = chooserTitle,
                     )
                 }
-            },
-            topBar = {
-                TopAppBar(
-                    title = {
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                snackbarHostState.currentSnackbarData?.dismiss()
+                snackbarHostState.showSnackbar(message = "Couldn't share", duration = SnackbarDuration.Short)
+            }
+        }
+    }
+
+    Scaffold(
+        snackbarHost = {
+            SnackbarHost(hostState = snackbarHostState) { data ->
+                Snackbar(
+                    snackbarData = data,
+                    containerColor = NetScopeDropdown,
+                    contentColor = Color.White,
+                    actionColor = NetScopeAccent,
+                    shape = RoundedCornerShape(10.dp),
+                )
+            }
+        },
+        topBar = {
+            TopAppBar(
+                title = {
+                    if (tx != null) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -152,206 +188,264 @@ fun TransactionDetailScreen(
                             MethodChip(method = tx.method)
                             StatusBadge(code = tx.responseCode, statusClass = tx.statusClass)
                         }
-                    },
-                    navigationIcon = {
-                        IconButton(onClick = onBack) {
+                    }
+                },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back",
+                            tint = NetScopeOnSurface,
+                        )
+                    }
+                },
+                actions = {
+                    if (tx == null) return@TopAppBar
+                    // Primary one-tap action: copy as cURL
+                    IconButton(onClick = {
+                        NetScopeExporter.copyToClipboard(
+                            context = context,
+                            text = NetScopeExporter.toCurl(tx),
+                            label = "cURL command",
+                        )
+                        onCopied("cURL command")
+                    }) {
+                        Icon(
+                            imageVector = Icons.Default.ContentCopy,
+                            contentDescription = "Copy as cURL",
+                            tint = NetScopeMuted,
+                        )
+                    }
+
+                    // Overflow: full summary copy/share + share as cURL
+                    Box {
+                        IconButton(onClick = { overflowExpanded = true }) {
                             Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Back",
-                                tint = NetScopeOnSurface,
-                            )
-                        }
-                    },
-                    actions = {
-                        // Primary one-tap action: copy as cURL
-                        IconButton(onClick = {
-                            NetScopeExporter.copyToClipboard(
-                                context = context,
-                                text = NetScopeExporter.toCurl(tx),
-                                label = "cURL command",
-                            )
-                            onCopied("cURL command")
-                        }) {
-                            Icon(
-                                imageVector = Icons.Default.ContentCopy,
-                                contentDescription = "Copy as cURL",
+                                imageVector = Icons.Default.MoreVert,
+                                contentDescription = "More options",
                                 tint = NetScopeMuted,
                             )
                         }
-
-                        // Overflow: full summary copy/share + share as cURL
-                        Box {
-                            IconButton(onClick = { overflowExpanded = true }) {
-                                Icon(
-                                    imageVector = Icons.Default.MoreVert,
-                                    contentDescription = "More options",
-                                    tint = NetScopeMuted,
-                                )
-                            }
-                            DropdownMenu(
-                                expanded = overflowExpanded,
-                                onDismissRequest = { overflowExpanded = false },
-                                containerColor = NetScopeDropdown,
-                            ) {
-                                DropdownMenuItem(
-                                    text = { Text("Copy full summary", color = NetScopeOnSurface, fontSize = 13.sp) },
-                                    leadingIcon = {
-                                        Icon(Icons.Default.ContentCopy, contentDescription = null, tint = NetScopeMuted, modifier = Modifier.size(16.dp))
-                                    },
-                                    onClick = {
-                                        overflowExpanded = false
-                                        NetScopeExporter.copyToClipboard(
-                                            context = context,
-                                            text = NetScopeExporter.toFullSummary(tx),
-                                            label = "Transaction summary",
-                                        )
-                                        onCopied("Full summary")
-                                    },
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Share as cURL", color = NetScopeOnSurface, fontSize = 13.sp) },
-                                    leadingIcon = {
-                                        Icon(Icons.Default.Share, contentDescription = null, tint = NetScopeMuted, modifier = Modifier.size(16.dp))
-                                    },
-                                    onClick = {
-                                        overflowExpanded = false
-                                        NetScopeExporter.share(
-                                            context = context,
-                                            text = NetScopeExporter.toCurl(tx),
-                                            chooserTitle = "Share request as cURL",
-                                        )
-                                    },
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Share full summary", color = NetScopeOnSurface, fontSize = 13.sp) },
-                                    leadingIcon = {
-                                        Icon(Icons.Default.Share, contentDescription = null, tint = NetScopeMuted, modifier = Modifier.size(16.dp))
-                                    },
-                                    onClick = {
-                                        overflowExpanded = false
-                                        NetScopeExporter.share(
-                                            context = context,
-                                            text = NetScopeExporter.toFullSummary(tx),
-                                            chooserTitle = "Share transaction",
-                                        )
-                                    },
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Share as HAR", color = NetScopeOnSurface, fontSize = 13.sp) },
-                                    leadingIcon = {
-                                        Icon(Icons.Default.Share, contentDescription = null, tint = NetScopeMuted, modifier = Modifier.size(16.dp))
-                                    },
-                                    onClick = {
-                                        overflowExpanded = false
-                                        NetScopeExporter.share(
-                                            context = context,
-                                            text = NetScopeExporter.toHar(listOf(tx)),
-                                            chooserTitle = "Share as HAR",
-                                        )
-                                    },
-                                )
-                            }
+                        DropdownMenu(
+                            expanded = overflowExpanded,
+                            onDismissRequest = { overflowExpanded = false },
+                            containerColor = NetScopeDropdown,
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Copy full summary", color = NetScopeOnSurface, fontSize = 13.sp) },
+                                leadingIcon = {
+                                    Icon(Icons.Default.ContentCopy, contentDescription = null, tint = NetScopeMuted, modifier = Modifier.size(16.dp))
+                                },
+                                onClick = {
+                                    overflowExpanded = false
+                                    NetScopeExporter.copyToClipboard(
+                                        context = context,
+                                        text = NetScopeExporter.toFullSummary(tx),
+                                        label = "Transaction summary",
+                                    )
+                                    onCopied("Full summary")
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Share as cURL", color = NetScopeOnSurface, fontSize = 13.sp) },
+                                leadingIcon = {
+                                    Icon(Icons.Default.Share, contentDescription = null, tint = NetScopeMuted, modifier = Modifier.size(16.dp))
+                                },
+                                onClick = {
+                                    overflowExpanded = false
+                                    NetScopeExporter.share(
+                                        context = context,
+                                        text = NetScopeExporter.toCurl(tx),
+                                        chooserTitle = "Share request as cURL",
+                                    )
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Share full summary", color = NetScopeOnSurface, fontSize = 13.sp) },
+                                leadingIcon = {
+                                    Icon(Icons.Default.Share, contentDescription = null, tint = NetScopeMuted, modifier = Modifier.size(16.dp))
+                                },
+                                onClick = {
+                                    overflowExpanded = false
+                                    shareAsFile("netscope-${tx.id}.txt", "text/plain", "Share transaction") {
+                                        NetScopeExporter.toFullSummary(tx)
+                                    }
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Share as HAR", color = NetScopeOnSurface, fontSize = 13.sp) },
+                                leadingIcon = {
+                                    Icon(Icons.Default.Share, contentDescription = null, tint = NetScopeMuted, modifier = Modifier.size(16.dp))
+                                },
+                                onClick = {
+                                    overflowExpanded = false
+                                    shareAsFile("netscope-${tx.id}.har", "application/json", "Share as HAR") {
+                                        NetScopeExporter.toHar(listOf(tx))
+                                    }
+                                },
+                            )
                         }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = NetScopeSurface),
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = NetScopeSurface),
+            )
+        },
+        containerColor = NetScopeDarkBackground,
+    ) { innerPadding ->
+        val contentModifier = Modifier
+            .fillMaxSize()
+            .padding(innerPadding)
+        when (val state = detailState) {
+            DetailUiState.Loading -> DetailLoading(contentModifier)
+            DetailUiState.Missing -> DetailMissing(onBack = onBack, modifier = contentModifier)
+            is DetailUiState.Loaded -> DetailContent(
+                tx = state.transaction,
+                tabs = tabs,
+                selectedTab = selectedTab,
+                onSelectTab = { selectedTab = it },
+                scrollStates = listOf(overviewScroll, requestScroll, responseScroll, timingScroll),
+                context = context,
+                onCopied = onCopied,
+                modifier = contentModifier,
+            )
+        }
+    }
+}
+
+@Composable
+private fun DetailContent(
+    tx: NetTransaction,
+    tabs: List<String>,
+    selectedTab: Int,
+    onSelectTab: (Int) -> Unit,
+    scrollStates: List<ScrollState>,
+    context: android.content.Context,
+    onCopied: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier) {
+        // ── URL strip with endpoint copy ──────────────────────────────────────
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(NetScopeSurface)
+                .padding(start = 16.dp, end = 4.dp, top = 10.dp, bottom = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = tx.host, color = NetScopeMuted, fontSize = 11.sp)
+                Text(
+                    text = tx.path + (tx.query?.let { "?$it" } ?: ""),
+                    color = NetScopeOnSurface,
+                    fontSize = 13.sp,
+                    fontFamily = FontFamily.Monospace,
+                )
+            }
+            IconButton(
+                onClick = {
+                    NetScopeExporter.copyToClipboard(
+                        context = context,
+                        text = "${tx.method} ${tx.url}",
+                        label = "Endpoint",
+                    )
+                    onCopied("Endpoint")
+                },
+                modifier = Modifier.size(36.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Default.ContentCopy,
+                    contentDescription = "Copy endpoint",
+                    tint = NetScopeMuted,
+                    modifier = Modifier.size(16.dp),
+                )
+            }
+        }
+
+        // ── Tab bar ───────────────────────────────────────────────────────────
+        ScrollableTabRow(
+            selectedTabIndex = selectedTab,
+            containerColor = NetScopeSurface,
+            contentColor = NetScopeAccent,
+            edgePadding = 0.dp,
+            indicator = { tabPositions ->
+                TabRowDefaults.SecondaryIndicator(
+                    modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
+                    color = NetScopeAccent,
+                    height = 2.dp,
                 )
             },
-            containerColor = NetScopeDarkBackground,
-        ) { innerPadding ->
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding),
-            ) {
-                // ── URL strip with endpoint copy ──────────────────────────────
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(NetScopeSurface)
-                        .padding(start = 16.dp, end = 4.dp, top = 10.dp, bottom = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(text = tx.host, color = NetScopeMuted, fontSize = 11.sp)
+            divider = { HorizontalDivider(color = NetScopeBorder) },
+        ) {
+            tabs.forEachIndexed { index, title ->
+                Tab(
+                    selected = selectedTab == index,
+                    onClick = { onSelectTab(index) },
+                    text = {
                         Text(
-                            text = tx.path + (tx.query?.let { "?$it" } ?: ""),
-                            color = NetScopeOnSurface,
+                            text = title,
                             fontSize = 13.sp,
-                            fontFamily = FontFamily.Monospace,
-                        )
-                    }
-                    IconButton(
-                        onClick = {
-                            NetScopeExporter.copyToClipboard(
-                                context = context,
-                                text = "${tx.method} ${tx.url}",
-                                label = "Endpoint",
-                            )
-                            onCopied("Endpoint")
-                        },
-                        modifier = Modifier.size(36.dp),
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.ContentCopy,
-                            contentDescription = "Copy endpoint",
-                            tint = NetScopeMuted,
-                            modifier = Modifier.size(16.dp),
-                        )
-                    }
-                }
-
-                // ── Tab bar ───────────────────────────────────────────────────
-                ScrollableTabRow(
-                    selectedTabIndex = selectedTab,
-                    containerColor = NetScopeSurface,
-                    contentColor = NetScopeAccent,
-                    edgePadding = 0.dp,
-                    indicator = { tabPositions ->
-                        TabRowDefaults.SecondaryIndicator(
-                            modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
-                            color = NetScopeAccent,
-                            height = 2.dp,
+                            fontWeight = if (selectedTab == index) FontWeight.SemiBold else FontWeight.Normal,
+                            color = if (selectedTab == index) NetScopeAccent else NetScopeMuted,
                         )
                     },
-                    divider = { HorizontalDivider(color = NetScopeBorder) },
-                ) {
-                    tabs.forEachIndexed { index, title ->
-                        Tab(
-                            selected = selectedTab == index,
-                            onClick = {
-                                previousTab = selectedTab
-                                selectedTab = index
-                            },
-                            text = {
-                                Text(
-                                    text = title,
-                                    fontSize = 13.sp,
-                                    fontWeight = if (selectedTab == index) FontWeight.SemiBold else FontWeight.Normal,
-                                    color = if (selectedTab == index) NetScopeAccent else NetScopeMuted,
-                                )
-                            },
-                        )
-                    }
-                }
+                )
+            }
+        }
 
-                // ── Tab content with directional slide ────────────────────────
-                AnimatedContent(
-                    targetState = selectedTab,
-                    transitionSpec = {
-                        val direction = if (targetState > initialState) 1 else -1
-                        (slideInHorizontally(tween(250)) { w -> direction * w } + fadeIn(tween(200))) togetherWith
-                            (slideOutHorizontally(tween(200)) { w -> -direction * w } + fadeOut(tween(150)))
-                    },
-                    label = "tabContent",
-                ) { tab ->
-                    when (tab) {
-                        0    -> OverviewTab(tx, context, onCopied)
-                        1    -> RequestTab(tx, context, onCopied)
-                        2    -> ResponseTab(tx, context, onCopied)
-                        3    -> TimingTab(tx)
-                        else -> Unit
-                    }
-                }
+        // ── Tab content with directional slide ────────────────────────────────
+        AnimatedContent(
+            targetState = selectedTab,
+            transitionSpec = {
+                val direction = if (targetState > initialState) 1 else -1
+                (slideInHorizontally(tween(250)) { w -> direction * w } + fadeIn(tween(200))) togetherWith
+                    (slideOutHorizontally(tween(200)) { w -> -direction * w } + fadeOut(tween(150)))
+            },
+            label = "tabContent",
+        ) { tab ->
+            when (tab) {
+                0    -> OverviewTab(tx, context, onCopied, scrollStates[0])
+                1    -> RequestTab(tx, context, onCopied, scrollStates[1])
+                2    -> ResponseTab(tx, context, onCopied, scrollStates[2])
+                3    -> TimingTab(tx, scrollStates[3])
+                else -> Unit
+            }
+        }
+    }
+}
+
+@Composable
+private fun DetailLoading(modifier: Modifier = Modifier) {
+    Box(modifier = modifier, contentAlignment = Alignment.Center) {
+        CircularProgressIndicator(
+            color = NetScopeAccent,
+            strokeWidth = 2.dp,
+            modifier = Modifier.size(24.dp),
+        )
+    }
+}
+
+@Composable
+private fun DetailMissing(onBack: () -> Unit, modifier: Modifier = Modifier) {
+    Box(modifier = modifier.padding(horizontal = 32.dp), contentAlignment = Alignment.Center) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text       = "This request is no longer available",
+                color      = NetScopeOnSurface,
+                fontSize   = 15.sp,
+                fontWeight = FontWeight.SemiBold,
+                textAlign  = TextAlign.Center,
+            )
+            Text(
+                text      = "It was removed when the capture limit was reached or the list was cleared.",
+                color     = NetScopeMuted,
+                fontSize  = 12.sp,
+                textAlign = TextAlign.Center,
+            )
+            TextButton(onClick = onBack) {
+                Text(text = "Back", color = NetScopeAccent, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
             }
         }
     }
@@ -364,11 +458,12 @@ private fun OverviewTab(
     tx: NetTransaction,
     context: android.content.Context,
     onCopied: (String) -> Unit,
+    scrollState: ScrollState,
 ) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(scrollState)
             .padding(vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(0.dp),
     ) {
@@ -402,12 +497,7 @@ private fun OverviewTab(
             MiniStatCard(
                 value = tx.durationMs?.let { "${it}ms" } ?: "—",
                 label = "Duration",
-                valueColor = when {
-                    tx.durationMs == null     -> NetScopeMuted
-                    tx.durationMs!! <= 300L   -> ColorSuccess
-                    tx.durationMs!! <= 1000L  -> ColorAmber
-                    else                      -> ColorError
-                },
+                valueColor = tx.durationMs?.let(::durationColor) ?: NetScopeMuted,
                 modifier = Modifier.weight(1f),
             )
             MiniStatCard(
@@ -517,31 +607,33 @@ private fun MiniStatCard(
 
 // ── Tab: Timing ───────────────────────────────────────────────────────────────
 
-private data class PhaseSegment(val label: String, val durationMs: Long, val color: Color)
-
 private val PhaseDns      = ColorPurple
 private val PhaseConnect  = Color(0xFF00C8F0)  // Cyan
 private val PhaseSsl      = ColorPink
 private val PhaseTtfb     = ColorAmber
-private val PhaseDownload = ColorSuccess
+
+private val TimingPhase.color: Color
+    get() = when (this) {
+        TimingPhase.DNS  -> PhaseDns
+        TimingPhase.TCP  -> PhaseConnect
+        TimingPhase.TLS  -> PhaseSsl
+        TimingPhase.TTFB -> PhaseTtfb
+    }
 
 @Composable
-private fun TimingTab(tx: NetTransaction) {
+private fun TimingTab(tx: NetTransaction, scrollState: ScrollState) {
     val dateFormat = remember { SimpleDateFormat("HH:mm:ss.SSS", Locale.getDefault()) }
-    val segments = remember(tx.dnsMs, tx.connectMs, tx.sslMs, tx.ttfbMs) {
-        buildList {
-            tx.dnsMs?.let     { add(PhaseSegment("DNS lookup",    it, PhaseDns))      }
-            tx.connectMs?.let { add(PhaseSegment("TCP connect",   it, PhaseConnect))  }
-            tx.sslMs?.let     { add(PhaseSegment("TLS handshake", it, PhaseSsl))      }
-            tx.ttfbMs?.let    { add(PhaseSegment("TTFB",          it, PhaseTtfb))     }
-        }
+    val breakdown = remember(tx.dnsMs, tx.connectMs, tx.sslMs, tx.ttfbMs) {
+        timingBreakdown(dnsMs = tx.dnsMs, connectMs = tx.connectMs, sslMs = tx.sslMs, ttfbMs = tx.ttfbMs)
     }
-    val total = remember(segments) { segments.sumOf { it.durationMs }.coerceAtLeast(1L) }
+    val segments = breakdown.phases
+    val barSegments = breakdown.barSegments
+    val total = breakdown.totalMs
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(scrollState)
             .padding(vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -609,11 +701,11 @@ private fun TimingTab(tx: NetTransaction) {
                                 modifier = Modifier
                                     .size(7.dp)
                                     .clip(CircleShape)
-                                    .background(seg.color),
+                                    .background(seg.phase.color),
                             )
                             // Phase name
                             Text(
-                                text     = seg.label,
+                                text     = seg.phase.label,
                                 color    = NetScopeText2,
                                 fontSize = 9.sp,
                                 fontFamily = FontFamily.SansSerif,
@@ -630,9 +722,9 @@ private fun TimingTab(tx: NetTransaction) {
                                 Box(
                                     modifier = Modifier
                                         .fillMaxHeight()
-                                        .fillMaxWidth(seg.durationMs.toFloat() / total)
+                                        .fillMaxWidth(if (total > 0L) seg.durationMs.toFloat() / total else 0f)
                                         .clip(RoundedCornerShape(4.dp))
-                                        .background(seg.color),
+                                        .background(seg.phase.color),
                                 )
                             }
                             // Ms value
@@ -659,28 +751,38 @@ private fun TimingTab(tx: NetTransaction) {
                     fontSize = 9.sp,
                     fontFamily = FontFamily.SansSerif,
                 )
-                // Stacked bar
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(14.dp)
-                        .clip(RoundedCornerShape(7.dp)),
-                    horizontalArrangement = Arrangement.spacedBy(1.dp),
-                ) {
-                    segments.forEachIndexed { i, seg ->
-                        val shape = when {
-                            segments.size == 1 -> RoundedCornerShape(7.dp)
-                            i == 0             -> RoundedCornerShape(topStart = 7.dp, bottomStart = 7.dp)
-                            i == segments.size - 1 -> RoundedCornerShape(topEnd = 7.dp, bottomEnd = 7.dp)
-                            else               -> RoundedCornerShape(0.dp)
+                // Stacked bar — only phases with a positive duration (RowScope.weight requires > 0)
+                if (barSegments.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(14.dp)
+                            .clip(RoundedCornerShape(7.dp))
+                            .background(NetScopeCardAlt),
+                    )
+                } else {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(14.dp)
+                            .clip(RoundedCornerShape(7.dp)),
+                        horizontalArrangement = Arrangement.spacedBy(1.dp),
+                    ) {
+                        barSegments.forEachIndexed { i, seg ->
+                            val shape = when {
+                                barSegments.size == 1     -> RoundedCornerShape(7.dp)
+                                i == 0                    -> RoundedCornerShape(topStart = 7.dp, bottomStart = 7.dp)
+                                i == barSegments.size - 1 -> RoundedCornerShape(topEnd = 7.dp, bottomEnd = 7.dp)
+                                else                      -> RoundedCornerShape(0.dp)
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .weight(seg.durationMs.toFloat())
+                                    .fillMaxHeight()
+                                    .clip(shape)
+                                    .background(seg.phase.color),
+                            )
                         }
-                        Box(
-                            modifier = Modifier
-                                .weight(seg.durationMs.toFloat() / total)
-                                .fillMaxHeight()
-                                .clip(shape)
-                                .background(seg.color),
-                        )
                     }
                 }
                 // Legend
@@ -696,10 +798,10 @@ private fun TimingTab(tx: NetTransaction) {
                                 modifier = Modifier
                                     .size(6.dp)
                                     .clip(RoundedCornerShape(2.dp))
-                                    .background(seg.color),
+                                    .background(seg.phase.color),
                             )
                             Text(
-                                text     = seg.label.substringBefore(" "),
+                                text     = seg.phase.label.substringBefore(" "),
                                 color    = NetScopeMuted,
                                 fontSize = 8.sp,
                                 fontFamily = FontFamily.SansSerif,
@@ -717,7 +819,12 @@ private fun TimingTab(tx: NetTransaction) {
 // ── Tab: Request ──────────────────────────────────────────────────────────────
 
 @Composable
-private fun RequestTab(tx: NetTransaction, context: android.content.Context, onCopied: (String) -> Unit) {
+private fun RequestTab(
+    tx: NetTransaction,
+    context: android.content.Context,
+    onCopied: (String) -> Unit,
+    scrollState: ScrollState,
+) {
     HttpMessageTab(
         headers = tx.requestHeaders,
         body = tx.requestBody,
@@ -726,13 +833,19 @@ private fun RequestTab(tx: NetTransaction, context: android.content.Context, onC
         bodyLabel = "Request body",
         context = context,
         onCopied = onCopied,
+        scrollState = scrollState,
     )
 }
 
 // ── Tab: Response ─────────────────────────────────────────────────────────────
 
 @Composable
-private fun ResponseTab(tx: NetTransaction, context: android.content.Context, onCopied: (String) -> Unit) {
+private fun ResponseTab(
+    tx: NetTransaction,
+    context: android.content.Context,
+    onCopied: (String) -> Unit,
+    scrollState: ScrollState,
+) {
     HttpMessageTab(
         headers = tx.responseHeaders,
         body = tx.responseBody,
@@ -742,6 +855,7 @@ private fun ResponseTab(tx: NetTransaction, context: android.content.Context, on
         bodyLabel = "Response body",
         context = context,
         onCopied = onCopied,
+        scrollState = scrollState,
     )
 }
 
@@ -756,11 +870,12 @@ private fun HttpMessageTab(
     bodyLabel: String,
     context: android.content.Context,
     onCopied: (String) -> Unit,
+    scrollState: ScrollState,
 ) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(scrollState)
             .padding(vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {

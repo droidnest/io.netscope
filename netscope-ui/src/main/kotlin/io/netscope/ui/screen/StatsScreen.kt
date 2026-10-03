@@ -20,10 +20,15 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.outlined.AutoGraph
+import androidx.compose.material.icons.outlined.FilterAlt
+import androidx.compose.material.icons.outlined.SearchOff
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -46,7 +51,6 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.netscope.model.NetTransaction
 import io.netscope.ui.component.ColorAmber
-import io.netscope.ui.component.ColorError
 import io.netscope.ui.component.ColorPink
 import io.netscope.ui.component.ColorPurple
 import io.netscope.ui.component.ColorSuccess
@@ -61,11 +65,13 @@ import io.netscope.ui.component.NetScopeOnSurface
 import io.netscope.ui.component.NetScopeSurface
 import io.netscope.ui.component.NetScopeText2
 import io.netscope.ui.component.color
+import io.netscope.ui.component.durationColor
 import io.netscope.ui.component.formatBytes
 import io.netscope.ui.component.methodColor
 import io.netscope.ui.viewmodel.DurationBucket
 import io.netscope.ui.viewmodel.NetScopeViewModel
 import io.netscope.ui.viewmodel.StatsData
+import io.netscope.ui.viewmodel.StatsFilter
 import kotlin.math.roundToInt
 
 // ── Screen ────────────────────────────────────────────────────────────────────
@@ -78,6 +84,7 @@ fun StatsScreen(
 ) {
     // Computed off the main thread in the ViewModel — null until the first result lands.
     val statsOrNull by viewModel.stats.collectAsStateWithLifecycle()
+    val statsFilter by viewModel.statsFilter.collectAsStateWithLifecycle()
 
     // Capture composable color tokens before lambdas / remember blocks
     val accent    = NetScopeAccent
@@ -107,7 +114,11 @@ fun StatsScreen(
         if (stats == null) {
             Box(modifier = Modifier.fillMaxSize().padding(innerPadding))
         } else if (stats.totalCount == 0) {
-            StatsEmptyState(modifier = Modifier.padding(innerPadding))
+            StatsEmptyState(
+                filter         = statsFilter,
+                onClearFilters = viewModel::clearFilters,
+                modifier       = Modifier.padding(innerPadding),
+            )
         } else {
             Column(
                 modifier = Modifier
@@ -117,6 +128,11 @@ fun StatsScreen(
                     .padding(vertical = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
+                // ── Active filter (stats mirror the filtered Requests list) ───
+                if (statsFilter.isFiltered) {
+                    FilteredBanner(filter = statsFilter, onClear = viewModel::clearFilters)
+                }
+
                 // ── Summary cards ─────────────────────────────────────────────
                 SummaryRow(stats)
 
@@ -125,29 +141,19 @@ fun StatsScreen(
                     PercentileRow(
                         label = "p50 (median)",
                         value = stats.p50Ms?.let { "${it}ms" } ?: "—",
-                        valueColor = when {
-                            stats.p50Ms == null   -> NetScopeMuted
-                            stats.p50Ms!! < 300L  -> ColorSuccess
-                            stats.p50Ms!! < 1000L -> ColorAmber
-                            else                  -> ColorError
-                        },
+                        valueColor = stats.p50Ms?.let(::durationColor) ?: NetScopeMuted,
                     )
                     HorizontalDivider(color = NetScopeBorder.copy(alpha = 0.5f), thickness = 0.5.dp)
                     PercentileRow(
                         label = "p95 (tail)",
                         value = stats.p95Ms?.let { "${it}ms" } ?: "—",
-                        valueColor = when {
-                            stats.p95Ms == null   -> NetScopeMuted
-                            stats.p95Ms!! < 300L  -> ColorSuccess
-                            stats.p95Ms!! < 1000L -> ColorAmber
-                            else                  -> ColorError
-                        },
+                        valueColor = stats.p95Ms?.let(::durationColor) ?: NetScopeMuted,
                     )
                     HorizontalDivider(color = NetScopeBorder.copy(alpha = 0.5f), thickness = 0.5.dp)
                     PercentileRow(
                         label      = "Avg",
                         value      = stats.avgDurationMs?.let { "${it}ms" } ?: "—",
-                        valueColor = if (stats.avgDurationMs != null) ColorSuccess else NetScopeMuted,
+                        valueColor = stats.avgDurationMs?.let(::durationColor) ?: NetScopeMuted,
                     )
                     HorizontalDivider(color = NetScopeBorder.copy(alpha = 0.5f), thickness = 0.5.dp)
                     PercentileRow(
@@ -183,7 +189,7 @@ fun StatsScreen(
                     StatsCard(title = "Response time") {
                         val maxBucket = stats.durationBuckets.maxOfOrNull { it.count } ?: 1
                         stats.durationBuckets.forEach { bucket ->
-                            BucketRow(bucket, maxBucket, stats.totalCount)
+                            BucketRow(bucket, maxBucket, stats.timedCount)
                         }
                     }
                 }
@@ -260,7 +266,7 @@ private fun SummaryRow(stats: StatsData) {
         SummaryCard(
             value      = stats.avgDurationMs?.let { "${it}ms" } ?: "—",
             label      = "AVG",
-            valueColor = if (stats.avgDurationMs != null) ColorSuccess else NetScopeMuted,
+            valueColor = stats.avgDurationMs?.let(::durationColor) ?: NetScopeMuted,
             modifier   = Modifier.weight(1f),
         )
     }
@@ -571,11 +577,7 @@ private fun BucketRow(bucket: DurationBucket, maxCount: Int, total: Int) {
 
 @Composable
 private fun SlowestRow(rank: Int, tx: NetTransaction, onClick: () -> Unit) {
-    val durationColor = when {
-        (tx.durationMs ?: 0L) <= 300L  -> ColorSuccess
-        (tx.durationMs ?: 0L) <= 1000L -> ColorAmber
-        else                            -> ColorError
-    }
+    val badgeColor = durationColor(tx.durationMs ?: 0L)
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -621,12 +623,12 @@ private fun SlowestRow(rank: Int, tx: NetTransaction, onClick: () -> Unit) {
         Box(
             modifier = Modifier
                 .clip(RoundedCornerShape(4.dp))
-                .background(durationColor.copy(alpha = 0.12f))
+                .background(badgeColor.copy(alpha = 0.12f))
                 .padding(horizontal = 6.dp, vertical = 2.dp),
         ) {
             Text(
                 text       = "${tx.durationMs}ms",
-                color      = durationColor,
+                color      = badgeColor,
                 fontSize   = 10.sp,
                 fontWeight = FontWeight.Bold,
                 fontFamily = FontFamily.Monospace,
@@ -703,10 +705,55 @@ private fun HostRow(host: String, count: Int, maxCount: Int, total: Int) {
     }
 }
 
+// ── Filter banner ─────────────────────────────────────────────────────────────
+
+@Composable
+private fun FilteredBanner(filter: StatsFilter, onClear: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(NetScopeAccent.copy(alpha = 0.10f))
+            .border(0.5.dp, NetScopeAccent.copy(alpha = 0.4f), RoundedCornerShape(10.dp))
+            .padding(start = 10.dp, top = 4.dp, bottom = 4.dp, end = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Icon(
+            imageVector        = Icons.Outlined.FilterAlt,
+            contentDescription = null,
+            tint               = NetScopeAccent,
+            modifier           = Modifier.size(14.dp),
+        )
+        Text(
+            text       = "Filtered: ${filter.description}",
+            color      = NetScopeOnSurface,
+            fontSize   = 11.sp,
+            fontFamily = FontFamily.Monospace,
+            maxLines   = 1,
+            overflow   = TextOverflow.Ellipsis,
+            modifier   = Modifier.weight(1f),
+        )
+        IconButton(onClick = onClear, modifier = Modifier.size(32.dp)) {
+            Icon(
+                imageVector        = Icons.Default.Close,
+                contentDescription = "Clear filters",
+                tint               = NetScopeAccent,
+                modifier           = Modifier.size(16.dp),
+            )
+        }
+    }
+}
+
 // ── Empty state ───────────────────────────────────────────────────────────────
 
 @Composable
-private fun StatsEmptyState(modifier: Modifier = Modifier) {
+private fun StatsEmptyState(
+    filter: StatsFilter,
+    onClearFilters: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     Box(
         modifier         = modifier.fillMaxSize(),
         contentAlignment = Alignment.Center,
@@ -724,7 +771,7 @@ private fun StatsEmptyState(modifier: Modifier = Modifier) {
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
-                    imageVector        = Icons.Outlined.AutoGraph,
+                    imageVector        = if (filter.isFiltered) Icons.Outlined.SearchOff else Icons.Outlined.AutoGraph,
                     contentDescription = null,
                     tint               = NetScopeMuted,
                     modifier           = Modifier.size(36.dp),
@@ -732,16 +779,28 @@ private fun StatsEmptyState(modifier: Modifier = Modifier) {
             }
             Spacer(Modifier.height(4.dp))
             Text(
-                text       = "No data yet",
+                text       = if (filter.isFiltered) "No requests match the current filter" else "No data yet",
                 color      = NetScopeOnSurface,
                 fontSize   = 17.sp,
                 fontWeight = FontWeight.SemiBold,
             )
-            Text(
-                text     = "Make some requests — analytics will appear here",
-                color    = NetScopeMuted,
-                fontSize = 13.sp,
-            )
+            if (filter.isFiltered) {
+                Text(
+                    text     = filter.description,
+                    color    = NetScopeMuted,
+                    fontSize = 13.sp,
+                    fontFamily = FontFamily.Monospace,
+                )
+                TextButton(onClick = onClearFilters) {
+                    Text(text = "Clear filters", color = NetScopeAccent, fontSize = 13.sp)
+                }
+            } else {
+                Text(
+                    text     = "Make some requests — analytics will appear here",
+                    color    = NetScopeMuted,
+                    fontSize = 13.sp,
+                )
+            }
         }
     }
 }
