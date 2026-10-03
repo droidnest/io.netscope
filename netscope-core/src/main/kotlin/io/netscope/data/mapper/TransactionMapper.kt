@@ -1,5 +1,6 @@
 package io.netscope.data.mapper
 
+import io.netscope.data.db.HeaderCodec
 import io.netscope.data.db.TransactionEntity
 import io.netscope.data.db.TransactionResponseUpdate
 import io.netscope.model.NetTransaction
@@ -48,6 +49,7 @@ internal object TransactionMapper {
         path = path,
         query = query,
         requestHeaders = requestHeaders,
+        requestHeadersText = HeaderCodec.toSearchText(requestHeaders),
         requestBody = requestBody,
         requestContentType = requestContentType,
         requestBodySize = requestBodySize,

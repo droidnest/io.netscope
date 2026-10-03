@@ -10,7 +10,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [TransactionEntity::class],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 @TypeConverters(HeaderListConverter::class)
@@ -31,7 +31,7 @@ abstract class NetScopeDatabase : RoomDatabase() {
                     NetScopeDatabase::class.java,
                     DB_NAME,
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                    .addMigrations(*ALL_MIGRATIONS)
                     // Debug tool: a downgraded host app may drop captured traffic rather than crash.
                     .fallbackToDestructiveMigrationOnDowngrade(dropAllTables = true)
                     .build()
@@ -39,6 +39,10 @@ abstract class NetScopeDatabase : RoomDatabase() {
             }
 
         // ── Migrations ────────────────────────────────────────────────────────
+
+        /** Every migration, oldest first; register all of them on any builder. */
+        internal val ALL_MIGRATIONS: Array<Migration>
+            get() = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
 
         /** Adds the four network-phase timing columns (all nullable). */
         internal val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -57,6 +61,39 @@ abstract class NetScopeDatabase : RoomDatabase() {
                     "CREATE INDEX IF NOT EXISTS `index_transactions_requestDate` " +
                     "ON `transactions` (`requestDate`)"
                 )
+            }
+        }
+
+        /**
+         * Adds the plain-text `requestHeadersText` search column and backfills it from the
+         * `requestHeaders` JSON. The same pass re-encodes both header JSON columns without Gson's
+         * HTML escaping (older rows store `=` as `\u003d`). A row whose JSON does not parse keeps
+         * its JSON untouched and an empty search text.
+         */
+        internal val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE transactions ADD COLUMN requestHeadersText TEXT NOT NULL DEFAULT ''"
+                )
+                db.compileStatement(
+                    "UPDATE transactions SET requestHeadersText = ?, requestHeaders = ?, " +
+                    "responseHeaders = ? WHERE id = ?"
+                ).use { update ->
+                    db.query("SELECT id, requestHeaders, responseHeaders FROM transactions").use { cursor ->
+                        while (cursor.moveToNext()) {
+                            val requestJson = cursor.getString(1)
+                            val responseJson = cursor.getString(2)
+                            val request = runCatching { HeaderCodec.fromJson(requestJson) }.getOrNull()
+                            val response = runCatching { HeaderCodec.fromJson(responseJson) }.getOrNull()
+                            update.clearBindings()
+                            update.bindString(1, request?.let(HeaderCodec::toSearchText).orEmpty())
+                            update.bindString(2, request?.let(HeaderCodec::toJson) ?: requestJson)
+                            update.bindString(3, response?.let(HeaderCodec::toJson) ?: responseJson)
+                            update.bindLong(4, cursor.getLong(0))
+                            update.executeUpdateDelete()
+                        }
+                    }
+                }
             }
         }
     }

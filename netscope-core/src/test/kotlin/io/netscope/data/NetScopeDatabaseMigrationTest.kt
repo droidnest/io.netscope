@@ -4,7 +4,12 @@ import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
+import io.netscope.NetScopeConfig
 import io.netscope.data.db.NetScopeDatabase
+import io.netscope.data.repository.TransactionRepositoryImpl
+import io.netscope.model.NetHeader
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -16,9 +21,9 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * Migrates a hand-built version-2 database (only the v3 schema JSON is exported, so
- * `MigrationTestHelper` cannot create v2). Room validates the migrated schema against the
- * v3 entities when it opens, so a wrong index name or column fails here.
+ * Migrates hand-built version-2 / version-3 databases (built with raw SQL so the test does not
+ * depend on `MigrationTestHelper` and older schema JSONs). Room validates the migrated schema
+ * against the current entities when it opens, so a wrong index name, column or default fails here.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -53,7 +58,7 @@ class NetScopeDatabaseMigrationTest {
 
         // When
         val db = Room.databaseBuilder(context, NetScopeDatabase::class.java, DB_NAME)
-            .addMigrations(NetScopeDatabase.MIGRATION_1_2, NetScopeDatabase.MIGRATION_2_3)
+            .addMigrations(*NetScopeDatabase.ALL_MIGRATIONS)
             .allowMainThreadQueries()
             .build()
 
@@ -75,6 +80,63 @@ class NetScopeDatabaseMigrationTest {
         }
     }
 
+    @Test
+    fun `migration 3 to 4 backfills header search text from escaped JSON`() = runTest {
+        // Given — headers exactly as the old default Gson() wrote them (`=` and `'` escaped)
+        val escapedJson =
+            "[{\"name\":\"Content-Type\",\"value\":\"application/json; charset\\u003dutf-8\",\"isRedacted\":false}," +
+            "{\"name\":\"X-Note\",\"value\":\"it\\u0027s \\u003cok\\u003e\",\"isRedacted\":false}]"
+        dbFile.parentFile?.mkdirs()
+        SQLiteDatabase.openOrCreateDatabase(dbFile, null).use { v3 ->
+            v3.execSQL(V2_CREATE_SQL)
+            v3.execSQL(V3_INDEX_SQL)
+            v3.execSQL(
+                "INSERT INTO transactions (requestDate, method, scheme, host, path, " +
+                "requestHeaders, requestBodySize, responseHeaders, responseBodySize) " +
+                "VALUES (1000, 'GET', 'https', 'api.example.com', '/users', ?, 0, ?, 0)",
+                arrayOf(escapedJson, escapedJson),
+            )
+            v3.execSQL(
+                "INSERT INTO transactions (requestDate, method, scheme, host, path, " +
+                "requestHeaders, requestBodySize, responseHeaders, responseBodySize) " +
+                "VALUES (2000, 'GET', 'https', 'api.example.com', '/plain', '[]', 0, '[]', 0)"
+            )
+            v3.version = 3
+        }
+
+        // When
+        val db = Room.databaseBuilder(context, NetScopeDatabase::class.java, DB_NAME)
+            .addMigrations(*NetScopeDatabase.ALL_MIGRATIONS)
+            .allowMainThreadQueries()
+            .build()
+        val repository = TransactionRepositoryImpl(db.transactionDao(), NetScopeConfig(), Dispatchers.Unconfined)
+
+        // Then
+        try {
+            assertEquals(listOf("/users"), repository.observeSummaries("charset=utf-8").first().map { it.path })
+            assertEquals(listOf("/users"), repository.observeSummaries("it's <ok>").first().map { it.path })
+            assertEquals(0, repository.observeSummaries("isRedacted").first().size)
+            assertEquals(2, repository.observeSummaries().first().size)
+
+            val migrated = repository.getAllWithBodies().single { it.path == "/users" }
+            val expected = listOf(
+                NetHeader("Content-Type", "application/json; charset=utf-8"),
+                NetHeader("X-Note", "it's <ok>"),
+            )
+            assertEquals(expected, migrated.requestHeaders)
+            assertEquals(expected, migrated.responseHeaders)
+            db.openHelper.readableDatabase
+                .query("SELECT requestHeaders, responseHeaders FROM transactions WHERE path = '/users'")
+                .use { cursor ->
+                    cursor.moveToFirst()
+                    assertTrue(cursor.getString(0), "charset=utf-8" in cursor.getString(0))
+                    assertTrue(cursor.getString(1), "charset=utf-8" in cursor.getString(1))
+                }
+        } finally {
+            db.close()
+        }
+    }
+
     private companion object {
         const val DB_NAME = "netscope-migration-test.db"
 
@@ -89,5 +151,9 @@ class NetScopeDatabaseMigrationTest {
             "`requestBodySize` INTEGER NOT NULL, `responseCode` INTEGER, `responseMessage` TEXT, " +
             "`responseHeaders` TEXT NOT NULL, `responseBody` TEXT, `responseContentType` TEXT, " +
             "`responseBodySize` INTEGER NOT NULL, `error` TEXT)"
+
+        /** The only v3 addition over [V2_CREATE_SQL]. */
+        const val V3_INDEX_SQL =
+            "CREATE INDEX IF NOT EXISTS `index_transactions_requestDate` ON `transactions` (`requestDate`)"
     }
 }

@@ -9,8 +9,9 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 
+/** Live list of transactions newest-first. Bodies are not loaded — see [TransactionRepository.observeSummaries]. */
 class GetTransactionsUseCase(private val repository: TransactionRepository) {
-    operator fun invoke(): Flow<List<NetTransaction>> = repository.observeAll()
+    operator fun invoke(): Flow<List<NetTransaction>> = repository.observeSummaries()
 }
 
 class GetTransactionByIdUseCase(private val repository: TransactionRepository) {
@@ -34,8 +35,16 @@ class ExportTransactionsUseCase(
     private val repository: TransactionRepository,
     private val defaultDispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) {
+    /** Exports every stored transaction. */
     suspend operator fun invoke(format: (List<NetTransaction>) -> String): String {
         val transactions = repository.getAllWithBodies()
+        return withContext(defaultDispatcher) { format(transactions) }
+    }
+
+    /** Exports only [ids] (e.g. the rows currently visible), loading just those bodies, in [ids] order. */
+    suspend operator fun invoke(ids: List<Long>, format: (List<NetTransaction>) -> String): String {
+        val byId = repository.getByIds(ids).associateBy { it.id }
+        val transactions = ids.mapNotNull { byId[it] }
         return withContext(defaultDispatcher) { format(transactions) }
     }
 }
@@ -54,7 +63,7 @@ class FilterTransactionsUseCase(
         methods: Set<String> = emptySet(),
         statusClasses: Set<NetTransaction.StatusClass> = emptySet(),
         sortOrder: SortOrder = SortOrder.TIME,
-    ): Flow<List<NetTransaction>> = repository.observeAll(query.trim())
+    ): Flow<List<NetTransaction>> = repository.observeSummaries(query.trim())
         .map { list ->
             list
                 .filter { tx -> methods.isEmpty() || tx.method.uppercase() in methods }

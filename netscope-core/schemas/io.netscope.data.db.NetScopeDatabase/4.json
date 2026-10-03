@@ -1,0 +1,173 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 4,
+    "identityHash": "d472470a6d74e587194fb62bca8cad81",
+    "entities": [
+      {
+        "tableName": "transactions",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `requestDate` INTEGER NOT NULL, `responseDate` INTEGER, `durationMs` INTEGER, `dnsMs` INTEGER, `connectMs` INTEGER, `sslMs` INTEGER, `ttfbMs` INTEGER, `method` TEXT NOT NULL, `scheme` TEXT NOT NULL, `host` TEXT NOT NULL, `path` TEXT NOT NULL, `query` TEXT, `requestHeaders` TEXT NOT NULL, `requestHeadersText` TEXT NOT NULL DEFAULT '', `requestBody` TEXT, `requestContentType` TEXT, `requestBodySize` INTEGER NOT NULL, `responseCode` INTEGER, `responseMessage` TEXT, `responseHeaders` TEXT NOT NULL, `responseBody` TEXT, `responseContentType` TEXT, `responseBodySize` INTEGER NOT NULL, `error` TEXT)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "requestDate",
+            "columnName": "requestDate",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "responseDate",
+            "columnName": "responseDate",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "durationMs",
+            "columnName": "durationMs",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "dnsMs",
+            "columnName": "dnsMs",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "connectMs",
+            "columnName": "connectMs",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "sslMs",
+            "columnName": "sslMs",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "ttfbMs",
+            "columnName": "ttfbMs",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "method",
+            "columnName": "method",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "scheme",
+            "columnName": "scheme",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "host",
+            "columnName": "host",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "path",
+            "columnName": "path",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "query",
+            "columnName": "query",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "requestHeaders",
+            "columnName": "requestHeaders",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "requestHeadersText",
+            "columnName": "requestHeadersText",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "''"
+          },
+          {
+            "fieldPath": "requestBody",
+            "columnName": "requestBody",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "requestContentType",
+            "columnName": "requestContentType",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "requestBodySize",
+            "columnName": "requestBodySize",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "responseCode",
+            "columnName": "responseCode",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "responseMessage",
+            "columnName": "responseMessage",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "responseHeaders",
+            "columnName": "responseHeaders",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "responseBody",
+            "columnName": "responseBody",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "responseContentType",
+            "columnName": "responseContentType",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "responseBodySize",
+            "columnName": "responseBodySize",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "error",
+            "columnName": "error",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_transactions_requestDate",
+            "unique": false,
+            "columnNames": [
+              "requestDate"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_transactions_requestDate` ON `${TABLE_NAME}` (`requestDate`)"
+          }
+        ]
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'd472470a6d74e587194fb62bca8cad81')"
+    ]
+  }
+}

@@ -26,6 +26,10 @@ interface TransactionDao {
     )
     suspend fun updateTiming(id: Long, dnsMs: Long?, connectMs: Long?, sslMs: Long?, ttfbMs: Long?)
 
+    /** Records the real response body byte count once the app has consumed the body. */
+    @Query("UPDATE transactions SET responseBodySize = :bytes WHERE id = :id")
+    suspend fun updateResponseSize(id: Long, bytes: Long)
+
     @Query("DELETE FROM transactions")
     suspend fun deleteAll()
 
@@ -52,14 +56,17 @@ interface TransactionDao {
      *
      * [pattern] is a LIKE fragment already escaped with `\` (see the repository); an empty
      * pattern matches every row. The search still runs over the bodies, inside SQLite.
-     * LIKE is case-insensitive for ASCII.
+     * Request headers are matched through the plain-text `requestHeadersText` column, never the
+     * JSON one (which would match keys like `name` / `value`). LIKE is case-insensitive for ASCII.
+     * `requestHeadersText` itself is projected as `''`: it is search-only and never mapped.
      */
     @Query(
         """
         SELECT id, requestDate, responseDate, durationMs,
                dnsMs, connectMs, sslMs, ttfbMs,
                method, scheme, host, path, `query`,
-               requestHeaders, NULL AS requestBody, requestContentType, requestBodySize,
+               requestHeaders, '' AS requestHeadersText,
+               NULL AS requestBody, requestContentType, requestBodySize,
                responseCode, responseMessage, responseHeaders, NULL AS responseBody,
                responseContentType, responseBodySize,
                error
@@ -68,13 +75,20 @@ interface TransactionDao {
            OR (scheme || '://' || host || path || COALESCE('?' || `query`, '')) LIKE '%' || :pattern || '%' ESCAPE '\'
            OR method                       LIKE '%' || :pattern || '%' ESCAPE '\'
            OR CAST(responseCode AS TEXT)   LIKE '%' || :pattern || '%' ESCAPE '\'
-           OR requestHeaders               LIKE '%' || :pattern || '%' ESCAPE '\'
+           OR requestHeadersText           LIKE '%' || :pattern || '%' ESCAPE '\'
            OR requestBody                  LIKE '%' || :pattern || '%' ESCAPE '\'
            OR responseBody                 LIKE '%' || :pattern || '%' ESCAPE '\'
         ORDER BY requestDate DESC
         """
     )
     fun observeList(pattern: String): Flow<List<TransactionEntity>>
+
+    /**
+     * Every full row (bodies included), newest-first, re-emitted on every change.
+     * Backs the deprecated `observeAll()` only; lists use [observeList].
+     */
+    @Query("SELECT * FROM transactions ORDER BY requestDate DESC")
+    fun observeAll(): Flow<List<TransactionEntity>>
 
     /** Full row (bodies included); re-emits whenever the table changes. */
     @Query("SELECT * FROM transactions WHERE id = :id LIMIT 1")
@@ -86,6 +100,13 @@ interface TransactionDao {
     /** One-shot read of every row with bodies, newest-first. Exports only. */
     @Query("SELECT * FROM transactions ORDER BY requestDate DESC")
     suspend fun getAll(): List<TransactionEntity>
+
+    /**
+     * Full rows for [ids], newest-first. Callers must keep [ids] under SQLite's bound-variable
+     * limit (999 before SQLite 3.32); the repository chunks.
+     */
+    @Query("SELECT * FROM transactions WHERE id IN (:ids) ORDER BY requestDate DESC")
+    suspend fun getByIds(ids: List<Long>): List<TransactionEntity>
 
     @Query("SELECT COUNT(*) FROM transactions")
     suspend fun count(): Int

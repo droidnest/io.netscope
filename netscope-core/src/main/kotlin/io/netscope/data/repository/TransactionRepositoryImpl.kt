@@ -39,7 +39,7 @@ internal class TransactionRepositoryImpl(
 
     // ── Reads ─────────────────────────────────────────────────────────────────
 
-    override fun observeAll(query: String): Flow<List<NetTransaction>> =
+    override fun observeSummaries(query: String): Flow<List<NetTransaction>> =
         dao.observeList(query.trim().escapeLike())
             .map { entities -> entities.map { it.toDomain() } }
             .flowOn(ioDispatcher)
@@ -55,9 +55,31 @@ internal class TransactionRepositoryImpl(
     override suspend fun getAllWithBodies(): List<NetTransaction> =
         dao.getAll().map { it.toDomain() }
 
+    @Deprecated("See TransactionRepository.observeAll")
+    override fun observeAll(): Flow<List<NetTransaction>> =
+        dao.observeAll()
+            .map { entities -> entities.map { it.toDomain() } }
+            .flowOn(ioDispatcher)
+
+    /** Queries in chunks of [IDS_PER_QUERY] (SQLite bound-variable limit), then re-sorts overall. */
+    override suspend fun getByIds(ids: Collection<Long>): List<NetTransaction> =
+        ids.distinct()
+            .chunked(IDS_PER_QUERY)
+            .flatMap { chunk -> dao.getByIds(chunk) }
+            .sortedByDescending { it.requestDate }
+            .map { it.toDomain() }
+
+    override suspend fun updateResponseSize(id: Long, bytes: Long) =
+        dao.updateResponseSize(id, bytes)
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     /** Escapes LIKE wildcards so user input matches literally (paired with `ESCAPE '\'`). */
     private fun String.escapeLike(): String =
         replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+    private companion object {
+        /** Below SQLite's historical 999 bound-variable limit (raised to 32766 only in 3.32). */
+        const val IDS_PER_QUERY = 500
+    }
 }

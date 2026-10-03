@@ -80,7 +80,7 @@ object NetScopeNotificationManager {
         }
 
         collectJob = scope.launch {
-            NetScope.repository.observeAll()
+            NetScope.repository.observeSummaries()
                 .map { it.toStats() }
                 // The list re-emits on every row write (insert, response, timing) — only
                 // re-post when what the notification shows actually changed.

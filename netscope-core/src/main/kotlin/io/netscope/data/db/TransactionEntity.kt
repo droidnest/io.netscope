@@ -1,12 +1,11 @@
 package io.netscope.data.db
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
 import androidx.room.TypeConverter
 import androidx.room.TypeConverters
-import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
 import io.netscope.model.NetHeader
 
 /**
@@ -14,6 +13,9 @@ import io.netscope.model.NetHeader
  *
  * `requestDate` is indexed: it drives the newest-first ORDER BY of every list query and the
  * prune that runs after each insert.
+ *
+ * `requestHeadersText` is a search-only copy of [requestHeaders] as `Name: Value` lines (see
+ * [HeaderCodec.toSearchText]); list queries LIKE against it instead of the JSON column.
  */
 @Entity(
     tableName = "transactions",
@@ -42,6 +44,8 @@ data class TransactionEntity(
     val path: String,
     val query: String?,
     val requestHeaders: List<NetHeader>,
+    @ColumnInfo(defaultValue = "")
+    val requestHeadersText: String = "",
     val requestBody: String?,
     val requestContentType: String?,
     val requestBodySize: Long,
@@ -58,13 +62,12 @@ data class TransactionEntity(
     val error: String?,
 )
 
+/** Room adapter for header lists; encoding lives in [HeaderCodec] (no HTML escaping). */
 class HeaderListConverter {
-    private val gson = Gson()
-    private val type = object : TypeToken<List<NetHeader>>() {}.type
 
     @TypeConverter
-    fun fromJson(value: String): List<NetHeader> = gson.fromJson(value, type)
+    fun fromJson(value: String): List<NetHeader> = HeaderCodec.fromJson(value)
 
     @TypeConverter
-    fun toJson(value: List<NetHeader>): String = gson.toJson(value)
+    fun toJson(value: List<NetHeader>): String = HeaderCodec.toJson(value)
 }
