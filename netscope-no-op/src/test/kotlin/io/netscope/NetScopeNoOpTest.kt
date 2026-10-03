@@ -46,6 +46,14 @@ class NetScopeNoOpTest {
         assertFalse(NetScope.shakeEnabled)
     }
 
+    @Test
+    fun `settings defaults mirror core`() {
+        // Instances need an android.content.Context, which plain JVM tests can't build — only the constants are checked.
+        assertEquals(500, NetScopeSettings.DEFAULT_MAX_TX)
+        assertEquals(250_000L, NetScopeSettings.DEFAULT_MAX_BODY)
+        assertEquals(setOf("Authorization", "Cookie", "Set-Cookie"), NetScopeSettings.DEFAULT_REDACTED)
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     /** Short-circuits the chain with a canned 200 so no network is touched. */
