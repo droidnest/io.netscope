@@ -4,6 +4,7 @@ import io.netscope.NetScopeConfig
 import io.netscope.data.db.TransactionDao
 import io.netscope.data.mapper.TransactionMapper.toDomain
 import io.netscope.data.mapper.TransactionMapper.toEntity
+import io.netscope.data.mapper.TransactionMapper.toEntityWithoutTiming
 import io.netscope.domain.repository.TransactionRepository
 import io.netscope.model.NetTransaction
 import kotlinx.coroutines.flow.Flow
@@ -21,7 +22,7 @@ internal class TransactionRepositoryImpl(
     }
 
     override suspend fun update(transaction: NetTransaction) {
-        dao.update(transaction.toEntity())
+        dao.updateWithoutTiming(transaction.toEntityWithoutTiming())
     }
 
     override fun observeAll(): Flow<List<NetTransaction>> =

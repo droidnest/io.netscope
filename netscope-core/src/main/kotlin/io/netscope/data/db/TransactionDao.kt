@@ -13,8 +13,9 @@ interface TransactionDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(entity: TransactionEntity): Long
 
-    @Update(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun update(entity: TransactionEntity)
+    /** Updates every column except the network-phase timing ones, which [updateTiming] owns. */
+    @Update(entity = TransactionEntity::class)
+    suspend fun updateWithoutTiming(transaction: TransactionWithoutTiming)
 
     @Query("SELECT * FROM transactions ORDER BY requestDate DESC")
     fun observeAll(): Flow<List<TransactionEntity>>
