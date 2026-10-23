@@ -32,6 +32,8 @@ abstract class NetScopeDatabase : RoomDatabase() {
                     DB_NAME,
                 )
                     .addMigrations(MIGRATION_1_2)
+                    // Captured traffic is disposable: a DB left by a newer build is rebuilt, not migrated.
+                    .fallbackToDestructiveMigrationOnDowngrade(dropAllTables = true)
                     .build()
                     .also { instance = it }
             }
