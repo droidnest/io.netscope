@@ -12,6 +12,7 @@ import io.netscope.NotificationStyle
 import io.netscope.model.NetTransaction
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
@@ -35,6 +36,7 @@ object NetScopeNotificationManager {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var initialized = false
+    private var updatesJob: Job? = null
 
     /**
      * Starts observing the NetScope repository and posts/updates a notification
@@ -79,7 +81,7 @@ object NetScopeNotificationManager {
             )
         }
 
-        scope.launch {
+        updatesJob = scope.launch {
             NetScope.repository.observeAll().collect { transactions ->
                 post(appContext, transactions, tapPendingIntent)
             }
@@ -88,6 +90,9 @@ object NetScopeNotificationManager {
 
     /** Cancels the notification and stops future updates. */
     fun dismiss(context: Context) {
+        // Stop collecting first: a live collector would post the notification again on the next request
+        updatesJob?.cancel()
+        updatesJob = null
         NotificationManagerCompat.from(context.applicationContext).cancel(NOTIFICATION_ID)
         initialized = false
     }
