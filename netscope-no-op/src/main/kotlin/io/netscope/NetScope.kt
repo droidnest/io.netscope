@@ -1,6 +1,7 @@
 package io.netscope
 
 import android.content.Context
+import io.netscope.model.MockRule
 import io.netscope.shake.NetScopeShakeDetector
 import okhttp3.Call
 import okhttp3.EventListener
@@ -31,7 +32,22 @@ object NetScope {
     fun timingListenerFactory(): EventListener.Factory =
         EventListener.Factory { EventListener.NONE }
 
+    /** No-op: returns a pass-through interceptor; no request is ever mocked. */
+    fun mockInterceptor(): Interceptor = NoOpInterceptor()
+
     fun isInitialized(): Boolean = false
+
+    // ── Config ────────────────────────────────────────────────────────────────
+
+    val config: NetScopeConfig = NetScopeConfig()
+    fun updateConfig(transform: NetScopeConfig.() -> NetScopeConfig) = Unit
+
+    // ── Mock rules ────────────────────────────────────────────────────────────
+
+    fun addMockRule(rule: MockRule) = Unit
+    fun updateMockRule(rule: MockRule) = Unit
+    fun deleteMockRule(id: String) = Unit
+    fun toggleMockRule(id: String) = Unit
 
     // ── Shake detector ────────────────────────────────────────────────────────
 
