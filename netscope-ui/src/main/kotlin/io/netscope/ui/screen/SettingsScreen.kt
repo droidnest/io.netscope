@@ -114,12 +114,14 @@ fun SettingsScreen(
     val context = LocalContext.current
     val prefs   = remember { NetScopePreferences(context) }
 
-    var maxTransactions    by rememberSaveable { mutableStateOf(prefs.maxTransactions) }
-    var maxBodySize        by rememberSaveable { mutableStateOf(prefs.maxBodySizeBytes) }
-    var alwaysReadBody     by rememberSaveable { mutableStateOf(prefs.alwaysReadResponseBody) }
-    var redactedHeaders    by rememberSaveable { mutableStateOf(prefs.redactedHeaders) }
-    var shakeToOpen        by rememberSaveable { mutableStateOf(prefs.shakeToOpen) }
-    var notifStyle         by rememberSaveable { mutableStateOf(prefs.notificationStyle) }
+    // Show what the library runs with: the app's configuration plus what was saved here
+    val config = NetScope.config
+    var maxTransactions    by rememberSaveable { mutableStateOf(config.maxTransactions) }
+    var maxBodySize        by rememberSaveable { mutableStateOf(config.maxBodySize) }
+    var alwaysReadBody     by rememberSaveable { mutableStateOf(config.alwaysReadResponseBody) }
+    var redactedHeaders    by rememberSaveable { mutableStateOf(config.redactedHeaders) }
+    var shakeToOpen        by rememberSaveable { mutableStateOf(NetScope.shakeEnabled) }
+    var notifStyle         by rememberSaveable { mutableStateOf(NetScope.notificationStyle) }
 
     var showClearDialog    by remember { mutableStateOf(false) }
     var showAddHeaderField by remember { mutableStateOf(false) }

@@ -7,9 +7,10 @@ import io.netscope.NotificationStyle
 /**
  * Thin SharedPreferences wrapper that persists NetScope UI settings.
  *
- * Capture settings take effect on the next app launch.
- * Interface settings (shakeToOpen, notificationStyle, themeMode) are
- * applied immediately at runtime via callback.
+ * The Settings screen applies each change at once and saves it here; on the next
+ * launch, netscope-core's `SavedSettings` reads the capture and interface settings
+ * back when `NetScope.interceptor()` runs. Both use the same file name and keys:
+ * change them together.
  */
 class NetScopePreferences(context: Context) {
 

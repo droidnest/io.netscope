@@ -2,6 +2,7 @@ package io.netscope
 
 import android.content.Context
 import io.netscope.data.db.NetScopeDatabase
+import io.netscope.data.local.SavedSettings
 import io.netscope.data.repository.TransactionRepositoryImpl
 import io.netscope.domain.repository.TransactionRepository
 import io.netscope.interceptor.NetScopeMockInterceptor
@@ -92,6 +93,9 @@ object NetScope {
     /**
      * Creates a configured [NetScopeInterceptor] and initialises the library.
      * Safe to call multiple times — subsequent calls reconfigure without data loss.
+     *
+     * Values the user saved in the NetScope Settings screen override the ones set in [block];
+     * saved redacted headers are added to the configured ones.
      */
     fun interceptor(
         context: Context,
@@ -99,7 +103,7 @@ object NetScope {
     ): NetScopeInterceptor {
         val config = ConfigBuilder().apply(block).build()
         init(context.applicationContext, config)
-        return NetScopeInterceptor(repository, config).also { activeInterceptor = it }
+        return NetScopeInterceptor(repository, _config).also { activeInterceptor = it }
     }
 
     /**
@@ -155,8 +159,11 @@ object NetScope {
 
     private fun init(context: Context, config: NetScopeConfig) {
         val db = NetScopeDatabase.getInstance(context)
-        _config = config
-        repository = TransactionRepositoryImpl(db.transactionDao(), config)
+        val savedSettings = SavedSettings(context)
+        _config = savedSettings.applyTo(config)
+        repository = TransactionRepositoryImpl(db.transactionDao(), _config)
+        savedSettings.notificationStyle?.let { notificationStyle = it }
+        savedSettings.shakeToOpen?.let { shakeEnabled = it }
         if (mockRuleStore == null) mockRuleStore = MockRuleStore(context)
         initialized = true
     }
