@@ -6,12 +6,24 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [Unreleased]
+## [0.7.0] — 2026-11-02
 
 ### Changed
 - `netscope-ui` screens follow MVI: one `uiState` and `onIntent` per flow
 - The detail screen follows the transaction live, and says so when it was deleted
 - The Stats response-time chart counts completed requests only
+
+### Added
+- Unit tests for the use cases, mock rule matching and every ViewModel
+
+### Fixed
+- Settings saved in the Settings screen apply when the library starts
+- Network timing is kept when the response is saved
+- The detail screen loads from its route argument, so it survives the app being recreated
+- The notification stops updating once it is dismissed
+- A database left by a newer build is rebuilt instead of crashing
+- `netscope-no-op` has the stubs release builds need to compile the README code
+- The Settings screen shows the current version
 
 ### Removed
 - **Breaking:** `NetScopeViewModel`, `FilterState`, `MockRulesViewModel` and the screen composables are
