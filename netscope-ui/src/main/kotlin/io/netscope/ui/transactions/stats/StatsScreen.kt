@@ -199,8 +199,9 @@ internal fun StatsScreen(
                 if (stats.durationBuckets.isNotEmpty()) {
                     StatsCard(title = "Response time") {
                         val maxBucket = stats.durationBuckets.maxOfOrNull { it.second } ?: 1
+                        val completedCount = stats.durationBuckets.sumOf { it.second }
                         stats.durationBuckets.forEach { (bucket, count) ->
-                            BucketRow(bucket = bucket.toUi(count = count), maxCount = maxBucket, total = stats.totalCount)
+                            BucketRow(bucket = bucket.toUi(count = count), maxCount = maxBucket, total = completedCount)
                         }
                     }
                 }

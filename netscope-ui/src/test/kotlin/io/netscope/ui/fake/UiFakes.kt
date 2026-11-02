@@ -8,6 +8,7 @@ import io.netscope.model.MockRule
 import io.netscope.model.NetTransaction
 import io.netscope.model.SettingChange
 import io.netscope.model.Settings
+import io.netscope.model.TrafficSummary
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -25,6 +26,14 @@ class FakeTransactionRepository(
     override suspend fun update(transaction: NetTransaction) = Unit
 
     override fun observeAll(): Flow<List<NetTransaction>> = transactions
+
+    override fun observeSummary(): Flow<TrafficSummary> = transactions.map { list ->
+        TrafficSummary(
+            requestCount = list.size,
+            errorCount = list.count { it.error != null || (it.responseCode ?: 0) >= 400 },
+            lastResponseCode = list.firstOrNull()?.responseCode,
+        )
+    }
 
     override suspend fun getById(id: Long): NetTransaction? = transactions.value.find { it.id == id }
 
@@ -76,6 +85,7 @@ class FakeSettingsRepository(
 fun aSettings(
     maxTransactions: Int = 500,
     redactedHeaders: Set<String> = setOf("authorization"),
+    lockedRedactedHeaders: Set<String> = emptySet(),
 ) = Settings(
     maxTransactions = maxTransactions,
     maxBodySize = 250_000L,
@@ -83,6 +93,7 @@ fun aSettings(
     redactedHeaders = redactedHeaders,
     shakeToOpen = true,
     notificationStyle = NotificationStyle.DETAILED,
+    lockedRedactedHeaders = lockedRedactedHeaders,
 )
 
 fun aTransaction(

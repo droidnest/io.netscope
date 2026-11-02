@@ -220,6 +220,7 @@ internal fun SettingsScreen(
                 ) {
                     RedactedHeadersEditor(
                         headers        = settings.redactedHeaders,
+                        lockedHeaders  = settings.lockedRedactedHeaders,
                         showAddField   = content.isAddHeaderOpen,
                         addInput       = content.addHeaderInput,
                         focusRequester = focusRequester,
@@ -532,6 +533,7 @@ private fun <T> OptionChips(
 @Composable
 private fun RedactedHeadersEditor(
     headers: Set<String>,
+    lockedHeaders: Set<String>,
     showAddField: Boolean,
     addInput: String,
     focusRequester: FocusRequester,
@@ -550,12 +552,14 @@ private fun RedactedHeadersEditor(
                     .clip(RoundedCornerShape(20.dp))
                     .background(NetScopeAccent.copy(alpha = 0.10f))
                     .border(0.5.dp, NetScopeAccent.copy(alpha = 0.30f), RoundedCornerShape(20.dp))
-                    .padding(start = 10.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+                    .padding(start = 10.dp, end = if (header in lockedHeaders) 10.dp else 4.dp, top = 4.dp, bottom = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(text = header, color = NetScopeAccent.copy(0.85f), fontSize = 11.sp, fontFamily = FontFamily.Monospace)
-                IconButton(onClick = { onRemove(header) }, modifier = Modifier.size(18.dp)) {
-                    Icon(Icons.Default.Close, contentDescription = "Remove $header", tint = NetScopeMuted, modifier = Modifier.size(11.dp))
+                if (header !in lockedHeaders) {
+                    IconButton(onClick = { onRemove(header) }, modifier = Modifier.size(18.dp)) {
+                        Icon(Icons.Default.Close, contentDescription = "Remove $header", tint = NetScopeMuted, modifier = Modifier.size(11.dp))
+                    }
                 }
             }
         }

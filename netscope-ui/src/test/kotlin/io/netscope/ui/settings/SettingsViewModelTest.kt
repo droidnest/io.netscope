@@ -100,12 +100,29 @@ class SettingsViewModelTest {
     }
 
     @Test
-    fun `should stop redacting the header when it is removed`() {
+    fun `should stop redacting a header the user added when it is removed`() {
         // When
         sut.onIntent(intent = SettingsUiIntent.HeaderRemoved(header = "authorization"))
 
         // Then
         assertEquals(emptySet<String>(), state.content.settings.redactedHeaders)
+    }
+
+    @Test
+    fun `should keep redacting a header the app configured when it is removed`() {
+        // Given
+        val settings = aSettings(lockedRedactedHeaders = setOf("authorization"))
+        val locked = SettingsViewModel(
+            getSettingsUseCase = GetSettingsUseCase(repository = FakeSettingsRepository(current = settings)),
+            updateSettingUseCase = UpdateSettingUseCase(repository = settingsRepository),
+            clearTransactionsUseCase = ClearTransactionsUseCase(repository = FakeTransactionRepository()),
+        )
+
+        // When
+        locked.onIntent(intent = SettingsUiIntent.HeaderRemoved(header = "authorization"))
+
+        // Then
+        assertEquals(emptyList<SettingChange>(), settingsRepository.changes)
     }
 
     @Test

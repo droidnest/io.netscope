@@ -1,6 +1,7 @@
 package io.netscope.domain.repository
 
 import io.netscope.model.NetTransaction
+import io.netscope.model.TrafficSummary
 import kotlinx.coroutines.flow.Flow
 
 /** The captured transactions, stored in the NetScope database. */
@@ -16,6 +17,9 @@ interface TransactionRepository {
 
     /** Emits the full list of transactions, sorted newest-first, on every change. */
     fun observeAll(): Flow<List<NetTransaction>>
+
+    /** Emits the [TrafficSummary] of the stored transactions on every change. */
+    fun observeSummary(): Flow<TrafficSummary>
 
     /** Returns a single transaction by ID, or null if not found. */
     suspend fun getById(id: Long): NetTransaction?

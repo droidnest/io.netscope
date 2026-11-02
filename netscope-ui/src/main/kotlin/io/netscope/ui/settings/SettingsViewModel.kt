@@ -43,10 +43,7 @@ internal class SettingsViewModel(
             )
             is SettingsUiIntent.HeaderTyped -> show(content = current.copy(addHeaderInput = intent.input))
             SettingsUiIntent.AddHeaderConfirmed -> addHeader(content = current)
-            is SettingsUiIntent.HeaderRemoved -> apply(
-                change = SettingChange.RedactedHeaders(headers = current.settings.redactedHeaders - intent.header),
-                content = current,
-            )
+            is SettingsUiIntent.HeaderRemoved -> removeHeader(header = intent.header, content = current)
             SettingsUiIntent.ClearAllClicked -> show(content = current.copy(isClearDialogOpen = true))
             SettingsUiIntent.ClearAllCancelled -> show(content = current.copy(isClearDialogOpen = false))
             SettingsUiIntent.ClearAllConfirmed -> clearAll(content = current)
@@ -65,6 +62,14 @@ internal class SettingsViewModel(
                 content = closed,
             )
         }
+    }
+
+    private fun removeHeader(header: String, content: SettingsContentUi) {
+        if (header in content.settings.lockedRedactedHeaders) return
+        apply(
+            change = SettingChange.RedactedHeaders(headers = content.settings.redactedHeaders - header),
+            content = content,
+        )
     }
 
     private fun apply(change: SettingChange, content: SettingsContentUi) {

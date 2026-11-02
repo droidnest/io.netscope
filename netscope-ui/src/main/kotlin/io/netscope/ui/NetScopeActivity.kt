@@ -40,9 +40,9 @@ class NetScopeActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        check(NetScope.isInitialized()) {
-            "NetScope not initialized. Call NetScope.interceptor(context) before launching."
-        }
+        // Android can recreate this Activity in a new process, before the app builds its client.
+        // Captured traffic is on disk, so it can show; the app's own call reconfigures the library.
+        if (!NetScope.isInitialized()) NetScope.interceptor(applicationContext)
 
         setContent {
             val prefs      = remember { NetScopePreferences(this@NetScopeActivity) }

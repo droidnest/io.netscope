@@ -19,6 +19,11 @@ android {
     defaultConfig {
         minSdk = 23
         consumerProguardFiles("consumer-rules.pro")
+        buildConfigField("String", "VERSION_NAME", "\"${project.property("VERSION_NAME")}\"")
+    }
+
+    buildFeatures {
+        buildConfig = true
     }
 
     compileOptions {
@@ -32,4 +37,7 @@ android {
 dependencies {
     api(project(":netscope-core"))
     implementation(libs.gson)
+    implementation(libs.core.ktx)
+
+    testImplementation(libs.junit)
 }

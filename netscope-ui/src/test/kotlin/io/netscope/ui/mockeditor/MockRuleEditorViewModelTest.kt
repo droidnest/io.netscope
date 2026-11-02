@@ -174,6 +174,35 @@ class MockRuleEditorViewModelTest {
     }
 
     @Test
+    fun `should save once when save is clicked again during the exit transition`() {
+        // Given
+        sut.onIntent(intent = MockRuleEditorUiIntent.Started(ruleId = null))
+        fillValidForm()
+        sut.onIntent(intent = MockRuleEditorUiIntent.SaveClicked)
+        sut.onIntent(intent = MockRuleEditorUiIntent.NavigationHandled)
+
+        // When
+        sut.onIntent(intent = MockRuleEditorUiIntent.SaveClicked)
+
+        // Then
+        assertEquals(2, repository.rules.value.size)
+    }
+
+    @Test
+    fun `should not save when the content type has a character a header cannot carry`() {
+        // Given
+        sut.onIntent(intent = MockRuleEditorUiIntent.Started(ruleId = null))
+        fillValidForm()
+        sut.onIntent(intent = MockRuleEditorUiIntent.ContentTypeTyped(contentType = "application/jsön"))
+
+        // When
+        sut.onIntent(intent = MockRuleEditorUiIntent.SaveClicked)
+
+        // Then
+        assertEquals(1, repository.rules.value.size)
+    }
+
+    @Test
     fun `should keep the match type when it is selected`() {
         // Given
         sut.onIntent(intent = MockRuleEditorUiIntent.Started(ruleId = null))

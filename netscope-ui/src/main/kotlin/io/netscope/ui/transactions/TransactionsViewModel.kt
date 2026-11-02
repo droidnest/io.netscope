@@ -12,12 +12,16 @@ import io.netscope.ui.mvi.BaseViewModel
 import io.netscope.ui.mvi.UiIntent
 import io.netscope.ui.mvi.UiState
 import io.netscope.ui.transactions.model.TransactionFilterUi
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -33,6 +37,7 @@ internal class TransactionsViewModel(
     private val filterTransactionsUseCase: FilterTransactionsUseCase,
     private val computeTransactionStatsUseCase: ComputeTransactionStatsUseCase,
     private val clearTransactionsUseCase: ClearTransactionsUseCase,
+    private val defaultDispatcher: CoroutineDispatcher,
 ) : BaseViewModel() {
 
     private val query = MutableStateFlow("")
@@ -40,7 +45,8 @@ internal class TransactionsViewModel(
     private val openMenu = MutableStateFlow<TransactionsMenu?>(null)
     private val openedTransactionId = MutableStateFlow<Long?>(null)
 
-    private val transactions = combine(query, filter) { query, filter -> query to filter }
+    // Filtering and the stats run once per new list, off the main thread, however many intents arrive
+    private val contents = combine(query, filter) { query, filter -> query to filter }
         .flatMapLatest { (query, filter) ->
             filterTransactionsUseCase(
                 query = query,
@@ -49,10 +55,12 @@ internal class TransactionsViewModel(
                 sortOrder = filter.sortOrder,
             )
         }
+        .map { transactions -> contentOf(transactions = transactions) }
+        .flowOn(defaultDispatcher)
 
     val uiState: StateFlow<UiState<TransactionsUiState>> =
-        combine(transactions, query, filter, openMenu, openedTransactionId) { transactions, query, filter, menu, openedId ->
-            val content = contentOf(transactions = transactions).copy(query = query, filter = filter, openMenu = menu)
+        combine(contents, query, filter, openMenu, openedTransactionId) { loaded, query, filter, menu, openedId ->
+            val content = loaded.copy(query = query, filter = filter, openMenu = menu)
             UiState.Success(
                 data = when (openedId) {
                     null -> TransactionsUiState.Content(content = content)
@@ -108,6 +116,7 @@ internal class TransactionsViewModel(
                 filterTransactionsUseCase = FilterTransactionsUseCase(repository = repository),
                 computeTransactionStatsUseCase = ComputeTransactionStatsUseCase(),
                 clearTransactionsUseCase = ClearTransactionsUseCase(repository = repository),
+                defaultDispatcher = Dispatchers.Default,
             ) as T
         }
     }

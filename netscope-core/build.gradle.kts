@@ -45,6 +45,7 @@ dependencies {
     implementation(libs.coroutines.android)
 
     testImplementation(libs.junit)
+    testImplementation(libs.okhttp)
     testImplementation(libs.coroutines.test)
     testImplementation(libs.turbine)
 }

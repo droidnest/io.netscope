@@ -248,6 +248,7 @@ internal fun TransactionListScreen(
                                         context = context,
                                         text = NetScopeExporter.toHar(transactions),
                                         chooserTitle = "Export as HAR",
+                                        fileName = "netscope.har",
                                     )
                                 },
                             )

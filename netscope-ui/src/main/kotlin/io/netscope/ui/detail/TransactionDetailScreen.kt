@@ -265,6 +265,7 @@ internal fun TransactionDetailScreen(
                                             context = context,
                                             text = NetScopeExporter.toHar(listOf(tx)),
                                             chooserTitle = "Share as HAR",
+                                            fileName = "netscope.har",
                                         )
                                     },
                                 )

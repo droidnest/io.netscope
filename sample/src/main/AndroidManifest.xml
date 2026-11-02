@@ -17,10 +17,6 @@
             </intent-filter>
         </activity>
 
-        <activity
-            android:name="io.netscope.ui.NetScopeActivity"
-            android:exported="false" />
-
     </application>
 
 </manifest>

@@ -7,10 +7,11 @@ import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import io.netscope.data.mapper.TransactionMapper
 
 @Database(
     entities = [TransactionEntity::class],
-    version = 2,
+    version = 3,
     exportSchema = false,
 )
 @TypeConverters(HeaderListConverter::class)
@@ -31,9 +32,9 @@ abstract class NetScopeDatabase : RoomDatabase() {
                     NetScopeDatabase::class.java,
                     DB_NAME,
                 )
-                    .addMigrations(MIGRATION_1_2)
-                    // Captured traffic is disposable: a DB left by a newer build is rebuilt, not migrated.
-                    .fallbackToDestructiveMigrationOnDowngrade(dropAllTables = true)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                    // Captured traffic is disposable: a DB with no migration path is rebuilt, not kept.
+                    .fallbackToDestructiveMigration(dropAllTables = true)
                     .build()
                     .also { instance = it }
             }
@@ -47,6 +48,18 @@ abstract class NetScopeDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE transactions ADD COLUMN connectMs INTEGER")
                 db.execSQL("ALTER TABLE transactions ADD COLUMN sslMs     INTEGER")
                 db.execSQL("ALTER TABLE transactions ADD COLUMN ttfbMs    INTEGER")
+            }
+        }
+
+        /** Drops the rows too big for a CursorWindow, which older builds could store. */
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "DELETE FROM transactions WHERE " +
+                        "COALESCE(LENGTH(CAST(requestBody AS BLOB)), 0) + " +
+                        "COALESCE(LENGTH(CAST(responseBody AS BLOB)), 0) > " +
+                        2 * TransactionMapper.MAX_STORED_BODY_BYTES,
+                )
             }
         }
     }

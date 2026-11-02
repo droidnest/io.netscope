@@ -19,5 +19,10 @@ internal data class MockRuleFormUi(
         get() = statusCode.toIntOrNull()
 
     val isValid: Boolean
-        get() = name.isNotBlank() && urlPattern.isNotBlank() && statusCodeValue?.let { it in 100..599 } == true
+        get() = name.isNotBlank() && urlPattern.isNotBlank() && isContentTypeValid &&
+            statusCodeValue?.let { it in 100..599 } == true
+
+    /** OkHttp rejects a header value with anything else, and the rule could never respond. */
+    private val isContentTypeValid: Boolean
+        get() = contentType.all { it == '\t' || it in ' '..'~' }
 }

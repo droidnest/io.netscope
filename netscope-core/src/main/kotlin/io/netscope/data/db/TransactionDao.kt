@@ -5,6 +5,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
+import io.netscope.model.TrafficSummary
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -19,6 +20,17 @@ interface TransactionDao {
 
     @Query("SELECT * FROM transactions ORDER BY requestDate DESC")
     fun observeAll(): Flow<List<TransactionEntity>>
+
+    /** Reads no body, so a change costs little however many transactions are stored. */
+    @Query(
+        """
+        SELECT COUNT(*) AS requestCount,
+            COALESCE(SUM(error IS NOT NULL OR responseCode >= 400), 0) AS errorCount,
+            (SELECT responseCode FROM transactions ORDER BY requestDate DESC LIMIT 1) AS lastResponseCode
+        FROM transactions
+        """
+    )
+    fun observeSummary(): Flow<TrafficSummary>
 
     @Query("SELECT * FROM transactions WHERE id = :id LIMIT 1")
     suspend fun getById(id: Long): TransactionEntity?

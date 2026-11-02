@@ -4,9 +4,12 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
+import androidx.core.content.FileProvider
 import com.google.gson.GsonBuilder
 import io.netscope.model.NetHeader
 import io.netscope.model.NetTransaction
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -21,9 +24,16 @@ import java.util.TimeZone
  * - [headersText]      — format a header list as `Name: Value` lines
  * - [toFullSummary]    — human-readable full transaction dump (good for bug reports)
  * - [copyToClipboard]  — copy text to the system clipboard
- * - [share]            — share text via the Android share sheet
+ * - [share]            — share text via the Android share sheet, as a file when it is large
  */
 object NetScopeExporter {
+
+    /** Most characters sent through Binder: a UTF-16 parcel of 200 KB, well under its 1 MB buffer. */
+    const val MAX_TRANSFER_CHARS = 100_000
+
+    // Same directory as res/xml/netscope_export_paths.xml, same suffix as the manifest's provider
+    private const val SHARE_DIRECTORY = "netscope-share"
+    private const val AUTHORITY_SUFFIX = ".netscope.exports"
 
     private val gson = GsonBuilder().setPrettyPrinting().create()
 
@@ -42,15 +52,14 @@ object NetScopeExporter {
      */
     fun toCurl(transaction: NetTransaction): String = buildString {
         append("curl -X ${transaction.method}")
-        append(" '${transaction.url}'")
+        append(" ${transaction.url.shellQuoted()}")
 
         transaction.requestHeaders.forEach { header ->
-            append(" \\\n  -H '${header.name}: ${header.value}'")
+            append(" \\\n  -H ${"${header.name}: ${header.value}".shellQuoted()}")
         }
 
         transaction.requestBody?.let { body ->
-            val escaped = body.replace("'", "'\\''")
-            append(" \\\n  --data-raw '$escaped'")
+            append(" \\\n  --data-raw ${body.shellQuoted()}")
         }
     }
 
@@ -118,7 +127,7 @@ object NetScopeExporter {
                 "version" to "1.2",
                 "creator" to mapOf(
                     "name" to "NetScope",
-                    "version" to "0.3.1",
+                    "version" to BuildConfig.VERSION_NAME,
                 ),
                 "entries" to entries,
             ),
@@ -203,22 +212,37 @@ object NetScopeExporter {
     // ── Android helpers ───────────────────────────────────────────────────────
 
     /**
-     * Copies [text] to the system clipboard with the given [label].
+     * Copies [text] to the system clipboard with the given [label]. The clipboard goes through
+     * Binder, which fails on large data, so text over [MAX_TRANSFER_CHARS] is cut with a note.
      */
     fun copyToClipboard(context: Context, text: String, label: String = "NetScope") {
         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        clipboard.setPrimaryClip(ClipData.newPlainText(label, text))
+        clipboard.setPrimaryClip(ClipData.newPlainText(label, text.forClipboard()))
     }
 
     /**
-     * Opens the Android share sheet to share [text] with other apps.
+     * Opens the Android share sheet to share [text] with other apps. Text over
+     * [MAX_TRANSFER_CHARS] is too large for an Intent, so it is shared as a file instead.
      *
      * @param chooserTitle Optional title shown on the share chooser dialog.
+     * @param fileName     Name of the file when [text] is shared as one.
      */
-    fun share(context: Context, text: String, chooserTitle: String = "Share via") {
+    fun share(
+        context: Context,
+        text: String,
+        chooserTitle: String = "Share via",
+        fileName: String = "netscope.txt",
+    ) {
         val intent = Intent(Intent.ACTION_SEND).apply {
             type = "text/plain"
-            putExtra(Intent.EXTRA_TEXT, text)
+            if (text.length <= MAX_TRANSFER_CHARS) {
+                putExtra(Intent.EXTRA_TEXT, text)
+            } else {
+                val uri = writeShareFile(context = context, text = text, fileName = fileName)
+                putExtra(Intent.EXTRA_STREAM, uri)
+                clipData = ClipData.newRawUri(null, uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
         }
         context.startActivity(Intent.createChooser(intent, chooserTitle).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -226,6 +250,21 @@ object NetScopeExporter {
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────
+
+    /** Wraps this value for a POSIX shell: nothing inside single quotes is interpreted. */
+    private fun String.shellQuoted(): String = "'" + replace("'", "'\\''") + "'"
+
+    internal fun String.forClipboard(): String {
+        if (length <= MAX_TRANSFER_CHARS) return this
+        val end = if (this[MAX_TRANSFER_CHARS - 1].isHighSurrogate()) MAX_TRANSFER_CHARS - 1 else MAX_TRANSFER_CHARS
+        return substring(0, end) + "\n… [cut by NetScope: ${length - end} more characters]"
+    }
+
+    private fun writeShareFile(context: Context, text: String, fileName: String): Uri {
+        val directory = File(context.cacheDir, SHARE_DIRECTORY).apply { mkdirs() }
+        val file = File(directory, fileName).apply { writeText(text) }
+        return FileProvider.getUriForFile(context, "${context.packageName}$AUTHORITY_SUFFIX", file)
+    }
 
     private fun List<NetHeader>.toHarHeaders(): List<Map<String, String>> =
         map { mapOf("name" to it.name, "value" to it.value) }

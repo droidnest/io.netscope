@@ -16,4 +16,6 @@ data class Settings(
     val shakeToOpen: Boolean,
     /** How much the status-bar notification shows. */
     val notificationStyle: NotificationStyle,
+    /** The [redactedHeaders] the app configured, which Settings cannot remove. */
+    val lockedRedactedHeaders: Set<String> = emptySet(),
 )

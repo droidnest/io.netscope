@@ -20,3 +20,7 @@ data class NetScopeConfig(
     /** Always read the response body even for non-text content types. */
     val alwaysReadResponseBody: Boolean = true,
 )
+
+/** This config with lower-case [NetScopeConfig.redactedHeaders], the form header matching compares. */
+internal fun NetScopeConfig.withNormalizedHeaders(): NetScopeConfig =
+    copy(redactedHeaders = redactedHeaders.map { it.lowercase() }.toSet())

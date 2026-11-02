@@ -10,6 +10,43 @@ Planned work is in the [README roadmap](README.md#roadmap).
 
 ## [Unreleased]
 
+### Added
+- `NetScope.notificationStyleFlow`, `TransactionRepository.observeSummary` and `Settings.lockedRedactedHeaders`
+- `netscope-no-op` mirrors `NetScope.repository`, `settingsRepository`, `mockRuleRepository` and `mockRules`,
+  with the types they use. Using them in release code needs `kotlinx-coroutines` in the app
+
+### Changed
+- Response bodies are captured as the app reads them, so `intercept` no longer waits for the body. A body
+  the app does not read stays empty, and `responseBodySize` is now the size the app read, in bytes
+- Stored bodies are limited to 800 KB of UTF-8, whatever the body size limit is
+- A database with no migration path is rebuilt again, as before 0.7.0; its captured traffic is lost
+- p50 and p95 use the nearest rank, one position lower than before
+- The notification stops reading transaction bodies
+
+### Fixed
+- `NetScopeActivity` is declared by `netscope-ui`, so apps no longer have to add it to their manifest. The
+  `<activity>` entry can be removed
+- Streaming responses such as `text/event-stream` are no longer held back by the capture
+- One-shot and duplex request bodies are left unread, and large ones are no longer read whole into memory
+- A row too large for Android's CursorWindow no longer crashes the app; existing ones are removed on upgrade
+- Large exports are shared as a file, and clipboard text over 100,000 characters is cut with a note, instead
+  of crashing with `TransactionTooLargeException`
+- Settings can no longer remove a header the app redacts: its chip has no remove button
+- `updateConfig` lower-cases `redactedHeaders`, so a header added through it is redacted
+- The mock interceptor docs give the working order: `NetScope.interceptor()` first, then
+  `NetScope.mockInterceptor()`. The sample now applies its mock rules
+- `NetScopeActivity` no longer crashes when Android recreates it in a new process. Until the app configures
+  NetScope, it shows the saved settings over the defaults
+- A second tap on Save in the mock rule editor no longer adds a duplicate rule
+- The Stats response-time percentages add up to 100%
+- `toCurl` escapes single quotes in the URL and headers, so an exported command cannot break or run a value
+- A mock rule with an invalid Content-Type is no longer saved, and one already saved no longer crashes the
+  request
+- A notification style change applies at once
+- HAR files carry the library's version
+- TTFB is measured from the last request after a redirect
+- Stats and filtering no longer run on the main thread
+
 ---
 
 ## [0.7.0] - 2026-11-02

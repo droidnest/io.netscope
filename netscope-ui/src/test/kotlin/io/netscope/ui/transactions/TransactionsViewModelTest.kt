@@ -40,6 +40,7 @@ class TransactionsViewModelTest {
             filterTransactionsUseCase = FilterTransactionsUseCase(repository = repository),
             computeTransactionStatsUseCase = ComputeTransactionStatsUseCase(),
             clearTransactionsUseCase = ClearTransactionsUseCase(repository = repository),
+            defaultDispatcher = mainDispatcherRule.dispatcher,
         )
     }
 

@@ -23,10 +23,10 @@ import java.util.concurrent.ConcurrentHashMap
  *
  * **Usage** — add to your `OkHttpClient` alongside the `NetScopeInterceptor`:
  * ```kotlin
- * val timingFactory = NetScope.timingListenerFactory()
+ * val interceptor = NetScope.interceptor(context) { … }  // ← must come first
  * val client = OkHttpClient.Builder()
- *     .addInterceptor(NetScope.interceptor(context) { … })
- *     .eventListenerFactory(timingFactory)
+ *     .addInterceptor(interceptor)
+ *     .eventListenerFactory(NetScope.timingListenerFactory())
  *     .build()
  * ```
  *
@@ -38,6 +38,7 @@ import java.util.concurrent.ConcurrentHashMap
 class NetScopeTimingListenerFactory internal constructor(
     private val repository: TransactionRepository,
     ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val clock: () -> Long = System::currentTimeMillis,
 ) : EventListener.Factory {
 
     // Call → DB row id.  Written by the interceptor via register(), read by the listener.
@@ -51,7 +52,7 @@ class NetScopeTimingListenerFactory internal constructor(
     }
 
     override fun create(call: Call): EventListener =
-        NetScopeTimingListener(call, pendingIds, scope, repository)
+        NetScopeTimingListener(call, pendingIds, scope, repository, clock)
 }
 
 // ── Per-call listener ─────────────────────────────────────────────────────────
@@ -61,6 +62,7 @@ private class NetScopeTimingListener(
     private val pendingIds: ConcurrentHashMap<Call, Long>,
     private val scope: CoroutineScope,
     private val repository: TransactionRepository,
+    private val clock: () -> Long,
 ) : EventListener() {
 
     private var dnsStart    = 0L
@@ -114,6 +116,11 @@ private class NetScopeTimingListener(
         requestSent = now()
     }
 
+    override fun requestHeadersStart(call: Call) {
+        // A redirect or retry sends a new request: the previous one's baseline no longer applies.
+        requestSent = 0L
+    }
+
     override fun requestHeadersEnd(call: Call, request: okhttp3.Request) {
         // For requests without a body, use headers-sent as the baseline.
         if (requestSent == 0L) requestSent = now()
@@ -139,5 +146,5 @@ private class NetScopeTimingListener(
         }
     }
 
-    private fun now() = System.currentTimeMillis()
+    private fun now() = clock()
 }

@@ -12,6 +12,7 @@ import io.netscope.model.Settings
  */
 internal class SettingsRepositoryImpl(
     private val savedSettings: SavedSettings,
+    private val configuredRedactedHeaders: Set<String>,
 ) : SettingsRepository {
 
     override fun getSettings(): Settings {
@@ -21,26 +22,36 @@ internal class SettingsRepositoryImpl(
             maxBodySize            = config.maxBodySize,
             alwaysReadResponseBody = config.alwaysReadResponseBody,
             redactedHeaders        = config.redactedHeaders,
+            lockedRedactedHeaders  = configuredRedactedHeaders,
             shakeToOpen            = NetScope.shakeEnabled,
             notificationStyle      = NetScope.notificationStyle,
         )
     }
 
     override fun update(change: SettingChange) {
-        when (change) {
+        val applied = change.keepingRedactionsOf(configuredHeaders = configuredRedactedHeaders)
+        when (applied) {
             is SettingChange.MaxTransactions ->
-                NetScope.updateConfig { copy(maxTransactions = change.count) }
+                NetScope.updateConfig { copy(maxTransactions = applied.count) }
             is SettingChange.MaxBodySize ->
-                NetScope.updateConfig { copy(maxBodySize = change.bytes) }
+                NetScope.updateConfig { copy(maxBodySize = applied.bytes) }
             is SettingChange.AlwaysReadResponseBody ->
-                NetScope.updateConfig { copy(alwaysReadResponseBody = change.isEnabled) }
+                NetScope.updateConfig { copy(alwaysReadResponseBody = applied.isEnabled) }
             is SettingChange.RedactedHeaders ->
-                NetScope.updateConfig { copy(redactedHeaders = change.headers.map { it.lowercase() }.toSet()) }
+                NetScope.updateConfig { copy(redactedHeaders = applied.headers) }
             is SettingChange.ShakeToOpen ->
-                NetScope.setShakeEnabled(enabled = change.isEnabled)
+                NetScope.setShakeEnabled(enabled = applied.isEnabled)
             is SettingChange.Notifications ->
-                NetScope.notificationStyle = change.style
+                NetScope.notificationStyle = applied.style
         }
-        savedSettings.save(change = change)
+        savedSettings.save(change = applied)
     }
 }
+
+/** This change, with [configuredHeaders] added back: Settings never un-redacts what the app redacts. */
+internal fun SettingChange.keepingRedactionsOf(configuredHeaders: Set<String>): SettingChange =
+    when (this) {
+        is SettingChange.RedactedHeaders ->
+            copy(headers = headers.map { it.lowercase() }.toSet() + configuredHeaders)
+        else -> this
+    }

@@ -69,6 +69,8 @@ val client = OkHttpClient.Builder()
             maxBodySize(250_000)          // bytes; bodies are truncated beyond this
         }
     )
+    // Optional: applies the mock rules. Must come after NetScope.interceptor() so mocked calls are recorded
+    .addInterceptor(NetScope.mockInterceptor())
     // Optional: captures DNS / TCP connect / TLS / TTFB per request
     .eventListenerFactory(NetScope.timingListenerFactory())
     .build()
@@ -249,7 +251,7 @@ never see the ViewModel, and navigation and open dialogs are part of the state.
 - **Mock response rules** — create rules that intercept matching requests and return fixture JSON (or any content type) without hitting the network
 - Rules match by URL pattern (Contains / Exact / Regex), optional HTTP method filter, and can carry a configurable delay
 - Full CRUD UI: list screen with per-rule toggle + delete, editor form for create/edit
-- `NetScopeMockInterceptor` — add before `NetScopeInterceptor` in your OkHttp chain; mocked responses are still recorded in the transaction list
+- `NetScopeMockInterceptor` — add after `NetScopeInterceptor` in your OkHttp chain; mocked responses are still recorded in the transaction list
 - Rules persisted across app restarts via SharedPreferences + Gson
 
 ### v0.4.0

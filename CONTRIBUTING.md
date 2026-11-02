@@ -58,6 +58,7 @@ The [README](README.md#architecture) describes the layers and the UI flows. When
 ```bash
 ./gradlew :netscope-core:testDebugUnitTest
 ./gradlew :netscope-ui:testDebugUnitTest
+./gradlew :netscope-export:testDebugUnitTest
 ```
 
 Tests use JUnit 4, `kotlinx-coroutines-test` and Turbine, with fakes in each module's `fake/` package. Name them

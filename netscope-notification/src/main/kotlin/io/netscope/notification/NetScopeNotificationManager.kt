@@ -9,11 +9,12 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import io.netscope.NetScope
 import io.netscope.NotificationStyle
-import io.netscope.model.NetTransaction
+import io.netscope.model.TrafficSummary
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
 /**
@@ -82,9 +83,9 @@ object NetScopeNotificationManager {
         }
 
         updatesJob = scope.launch {
-            NetScope.repository.observeAll().collect { transactions ->
-                post(appContext, transactions, tapPendingIntent)
-            }
+            combine(NetScope.repository.observeSummary(), NetScope.notificationStyleFlow) { summary, style ->
+                summary to style
+            }.collect { (summary, style) -> post(appContext, summary, style, tapPendingIntent) }
         }
     }
 
@@ -111,26 +112,27 @@ object NetScopeNotificationManager {
 
     private fun post(
         context: Context,
-        transactions: List<NetTransaction>,
+        summary: TrafficSummary,
+        style: NotificationStyle,
         tapIntent: PendingIntent?,
     ) {
         // Respect the user's notification style preference.
-        when (NetScope.notificationStyle) {
+        when (style) {
             NotificationStyle.NONE -> {
                 NotificationManagerCompat.from(context).cancel(NOTIFICATION_ID)
                 return
             }
-            NotificationStyle.MINIMAL -> postMinimal(context, transactions, tapIntent)
-            NotificationStyle.DETAILED -> postDetailed(context, transactions, tapIntent)
+            NotificationStyle.MINIMAL -> postMinimal(context, summary, tapIntent)
+            NotificationStyle.DETAILED -> postDetailed(context, summary, tapIntent)
         }
     }
 
     private fun postMinimal(
         context: Context,
-        transactions: List<NetTransaction>,
+        summary: TrafficSummary,
         tapIntent: PendingIntent?,
     ) {
-        val total = transactions.size
+        val total = summary.requestCount
         val title = "$total request${if (total != 1) "s" else ""} captured"
 
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
@@ -148,16 +150,12 @@ object NetScopeNotificationManager {
 
     private fun postDetailed(
         context: Context,
-        transactions: List<NetTransaction>,
+        summary: TrafficSummary,
         tapIntent: PendingIntent?,
     ) {
-        val total = transactions.size
-        val errors = transactions.count {
-            it.statusClass == NetTransaction.StatusClass.CLIENT_ERROR ||
-                    it.statusClass == NetTransaction.StatusClass.SERVER_ERROR ||
-                    it.statusClass == NetTransaction.StatusClass.ERROR
-        }
-        val lastCode = transactions.firstOrNull()?.responseCode
+        val total = summary.requestCount
+        val errors = summary.errorCount
+        val lastCode = summary.lastResponseCode
 
         val title = "$total request${if (total != 1) "s" else ""} captured"
         val text = buildString {

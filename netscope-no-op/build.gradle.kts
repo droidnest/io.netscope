@@ -31,4 +31,6 @@ android {
 dependencies {
     // OkHttp — same compileOnly, so consumers can swap implementations freely
     compileOnly("com.squareup.okhttp3:okhttp:4.12.0")
+    // Only the members typed with Flow touch it, so apps without coroutines are not affected
+    compileOnly(libs.coroutines.core)
 }

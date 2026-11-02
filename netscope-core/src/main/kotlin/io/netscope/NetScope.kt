@@ -16,6 +16,7 @@ import io.netscope.model.MockRule
 import io.netscope.shake.NetScopeShakeDetector
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * Main entry point for the NetScope library.
@@ -70,14 +71,23 @@ object NetScope {
     /** The configuration the library runs with; available after [interceptor]. */
     val config: NetScopeConfig get() = _config
 
-    private var initialized = false
+    @Volatile private var initialized = false
 
     @Volatile private var activeInterceptor: NetScopeInterceptor? = null
 
     // ── Notification style ────────────────────────────────────────────────────
 
+    private val _notificationStyleFlow = MutableStateFlow(NotificationStyle.DETAILED)
+
+    /** Emits [notificationStyle] and every change of it. */
+    val notificationStyleFlow: StateFlow<NotificationStyle> = _notificationStyleFlow.asStateFlow()
+
     /** Controls notification display density. Updated immediately by the Settings UI. */
-    @Volatile var notificationStyle: NotificationStyle = NotificationStyle.DETAILED
+    var notificationStyle: NotificationStyle
+        get() = _notificationStyleFlow.value
+        set(value) {
+            _notificationStyleFlow.value = value
+        }
 
     // ── Shake-to-open ─────────────────────────────────────────────────────────
 
@@ -126,8 +136,8 @@ object NetScope {
 
     /**
      * Creates a [NetScopeMockInterceptor] that short-circuits matching requests.
-     * Add it **before** [interceptor] in the OkHttpClient chain so mocked responses
-     * are still recorded in the transaction list.
+     * Add it **after** [interceptor] in the OkHttpClient chain: the capture has to run first
+     * for mocked responses to be recorded in the transaction list.
      *
      * **Must be called after [interceptor]** so that the library is initialised.
      */
@@ -166,7 +176,7 @@ object NetScope {
      */
     fun updateConfig(transform: NetScopeConfig.() -> NetScopeConfig) {
         if (!isInitialized()) return
-        val newConfig = _config.transform()
+        val newConfig = _config.transform().withNormalizedHeaders()
         _config = newConfig
         activeInterceptor?.config = newConfig
         (repository as? TransactionRepositoryImpl)?.config = newConfig
@@ -174,12 +184,16 @@ object NetScope {
 
     // ── Internal ──────────────────────────────────────────────────────────────
 
+    @Synchronized
     private fun init(context: Context, config: NetScopeConfig) {
         val db = NetScopeDatabase.getInstance(context)
         val savedSettings = SavedSettings(context)
         _config = savedSettings.applyTo(config)
         repository = TransactionRepositoryImpl(db.transactionDao(), _config)
-        settingsRepository = SettingsRepositoryImpl(savedSettings = savedSettings)
+        settingsRepository = SettingsRepositoryImpl(
+            savedSettings = savedSettings,
+            configuredRedactedHeaders = config.redactedHeaders,
+        )
         savedSettings.notificationStyle?.let { notificationStyle = it }
         savedSettings.shakeToOpen?.let { shakeEnabled = it }
         if (mockRuleStore == null) mockRuleStore = MockRuleRepositoryImpl(context)

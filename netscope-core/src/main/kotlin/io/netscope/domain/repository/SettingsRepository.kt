@@ -9,6 +9,9 @@ interface SettingsRepository {
     /** Returns what the library currently runs with. */
     fun getSettings(): Settings
 
-    /** Applies [change] to the running library at once and saves it for the next launches. */
+    /**
+     * Applies [change] to the running library at once and saves it for the next launches.
+     * Headers in [Settings.lockedRedactedHeaders] stay redacted whatever [change] says.
+     */
     fun update(change: SettingChange)
 }

@@ -84,9 +84,10 @@ class MainActivity : ComponentActivity() {
         // 2. Build the timing factory — must come after interceptor().
         val timingFactory = NetScope.timingListenerFactory()
 
-        // 3. Build the OkHttp client with both interceptor and event listener.
+        // 3. Build the OkHttp client: capture first, then the mock rules, so mocked calls are recorded.
         client = OkHttpClient.Builder()
             .addInterceptor(interceptor)
+            .addInterceptor(NetScope.mockInterceptor())
             .eventListenerFactory(timingFactory)
             .build()
 

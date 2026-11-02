@@ -7,6 +7,7 @@ import io.netscope.data.mapper.TransactionMapper.toEntity
 import io.netscope.data.mapper.TransactionMapper.toEntityWithoutTiming
 import io.netscope.domain.repository.TransactionRepository
 import io.netscope.model.NetTransaction
+import io.netscope.model.TrafficSummary
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -27,6 +28,8 @@ internal class TransactionRepositoryImpl(
 
     override fun observeAll(): Flow<List<NetTransaction>> =
         dao.observeAll().map { entities -> entities.map { it.toDomain() } }
+
+    override fun observeSummary(): Flow<TrafficSummary> = dao.observeSummary()
 
     override suspend fun getById(id: Long): NetTransaction? =
         dao.getById(id)?.toDomain()

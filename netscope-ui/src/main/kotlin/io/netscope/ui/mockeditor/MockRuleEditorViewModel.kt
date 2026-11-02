@@ -24,6 +24,9 @@ internal class MockRuleEditorViewModel(
     private val _uiState = MutableStateFlow<UiState<MockRuleEditorUiState>>(UiState.Idle)
     val uiState: StateFlow<UiState<MockRuleEditorUiState>> = _uiState.asStateFlow()
 
+    // The screen stays tappable through its exit transition, after NavigationHandled
+    private var isSaved = false
+
     override fun onIntent(intent: UiIntent) {
         if (intent !is MockRuleEditorUiIntent) return
         when (intent) {
@@ -54,7 +57,8 @@ internal class MockRuleEditorViewModel(
 
     private fun save() {
         val state = _uiState.value.dataOrNull() as? MockRuleEditorUiState.Content ?: return
-        if (!state.form.isValid) return
+        if (isSaved || !state.form.isValid) return
+        isSaved = true
         saveMockRuleUseCase(rule = state.form.toMockRule())
         _uiState.value = UiState.Success(data = MockRuleEditorUiState.Navigating(form = state.form))
     }

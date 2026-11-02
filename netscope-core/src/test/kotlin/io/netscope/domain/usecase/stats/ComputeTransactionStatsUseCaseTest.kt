@@ -103,8 +103,8 @@ class ComputeTransactionStatsUseCaseTest {
         val result = sut(transactions = transactions.reversed())
 
         // Then
-        assertEquals(110L, result.p50Ms)
-        assertEquals(200L, result.p95Ms)
+        assertEquals(100L, result.p50Ms)
+        assertEquals(190L, result.p95Ms)
     }
 
     @Test

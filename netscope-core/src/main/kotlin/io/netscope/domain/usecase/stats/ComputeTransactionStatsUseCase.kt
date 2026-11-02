@@ -48,8 +48,9 @@ class ComputeTransactionStatsUseCase {
         else         -> DurationBucket.VERY_SLOW
     }
 
+    /** Nearest rank: the value at the smallest position that covers [percent] of the list. */
     private fun List<Long>.percentile(percent: Int): Long? =
-        if (isEmpty()) null else this[(size * percent / 100).coerceAtMost(maximumValue = size - 1)]
+        if (isEmpty()) null else this[(size * percent + 99) / 100 - 1]
 
     private companion object {
         const val RANKING_SIZE = 5
