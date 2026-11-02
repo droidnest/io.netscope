@@ -177,7 +177,7 @@ NetScopeTimingListenerFactory ← optional: DNS/TCP/TLS/TTFB phases
 TransactionRepositoryImpl    ← Room DAO, Flow<List<NetTransaction>>
     │
     ▼
-NetScopeViewModel            ← StateFlow, search + filter + sort
+TransactionsViewModel        ← one StateFlow<UiState>, search + filter + sort
     │
     ▼
 Compose UI                   ← TransactionListScreen / TransactionDetailScreen

@@ -6,6 +6,21 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [Unreleased]
+
+### Changed
+- `netscope-ui` screens follow MVI: one `uiState` and `onIntent` per flow
+- The detail screen follows the transaction live, and says so when it was deleted
+- The Stats response-time chart counts completed requests only
+
+### Removed
+- **Breaking:** `NetScopeViewModel`, `FilterState`, `MockRulesViewModel` and the screen composables are
+  no longer public
+- **Breaking:** `GetTransactionsUseCase` and `GetTransactionByIdUseCase`; the other use cases moved to
+  `io.netscope.domain.usecase.<area>`, and `SortOrder` to `io.netscope.model`
+
+---
+
 ## [0.1.0] — 2024-XX-XX
 
 ### Added
