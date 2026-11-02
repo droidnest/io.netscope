@@ -21,7 +21,8 @@
 | Module | Role | Include in |
 |---|---|---|
 | `netscope-core` | OkHttp interceptor, Room DB, domain models | debug |
-| `netscope-ui` | Compose UI — list, detail, settings screens | debug |
+| `netscope-ui` | Compose UI — list, detail, stats, mock rules, settings screens | debug |
+| `netscope-export` | cURL, HAR and summary export, clipboard and share sheet | debug (comes with `netscope-ui`) |
 | `netscope-notification` | Persistent status-bar notification with live stats | debug (optional) |
 | `netscope-no-op` | Zero-overhead release stub — same API, no-ops | release |
 
@@ -34,7 +35,7 @@
 **`libs.versions.toml`**
 ```toml
 [versions]
-netscope = "0.6.0"
+netscope = "0.7.0"
 
 [libraries]
 netscope-core         = { group = "io.github.droidnest", name = "netscope-core",         version.ref = "netscope" }
@@ -115,7 +116,8 @@ NetScopeActivity.launch(context)
 - ✅ p50 / p95 / avg latency with adaptive color coding
 - ✅ Status class stacked bar + per-class breakdown table (2xx / 3xx / 4xx / 5xx / Error)
 - ✅ HTTP method distribution — proportional bars, count, percentage
-- ✅ Response time histogram — < 100ms / 100–300ms / 300ms–1s / > 1s buckets
+- ✅ Response time histogram of completed requests — < 100ms / 100–300ms / 300ms–1s / > 1s buckets
+- ✅ Follows the list's search and filters
 - ✅ Top 5 slowest requests — tappable, ranked with duration badge
 - ✅ Top 5 hosts by request count with mini inline bar
 
@@ -137,6 +139,7 @@ NetScopeActivity.launch(context)
 
 ### UI — Transaction detail
 - ✅ Four tabs: **Overview** · **Request** · **Response** · **Timing**
+- ✅ Live — a pending request fills in as soon as its response and timing are saved
 - ✅ Overview: request/response dcard sections + 3 mini stat cards (Duration · Size · Protocol) + Copy as cURL row
 - ✅ Timing: Summary card (Started · Completed · Total) + phase bars (DNS=purple, TCP=cyan, TLS=pink, TTFB=amber) + stacked timeline bar + legend
 - ✅ Directional slide animation between tabs
@@ -177,28 +180,64 @@ NetScopeTimingListenerFactory ← optional: DNS/TCP/TLS/TTFB phases
 TransactionRepositoryImpl    ← Room DAO, Flow<List<NetTransaction>>
     │
     ▼
-TransactionsViewModel        ← one StateFlow<UiState>, search + filter + sort
+FilterTransactionsUseCase    ← search + filter + sort
     │
     ▼
-Compose UI                   ← TransactionListScreen / TransactionDetailScreen
+TransactionsViewModel        ← one StateFlow<UiState<T>>, onIntent(intent)
+    │
+    ▼
+Compose UI                   ← TransactionListScreen / StatsScreen
 ```
+
+### Layers
+
+| Layer | Module and package | Holds |
+|---|---|---|
+| Domain | `netscope-core`: `domain/repository`, `domain/usecase/<area>`, `model` | Repository interfaces, one use case per file, models |
+| Data | `netscope-core`: `data/db`, `data/local`, `data/mapper`, `data/repository` | Room, SharedPreferences, repository implementations |
+| UI | `netscope-ui`: one package per flow | ViewModels, intents, screen states, Compose screens |
+
+The UI depends on use cases, never on a repository implementation. There is no DI framework: the `NetScope`
+object holds the repositories, and each ViewModel's `Factory` builds the use cases from them.
+
+### UI flows
+
+Each flow has one ViewModel that exposes `uiState` and takes `onIntent(intent)`. Screens receive those two and
+never see the ViewModel, and navigation and open dialogs are part of the state.
+
+| Flow | Package | Screens | Scope |
+|---|---|---|---|
+| Transactions | `ui.transactions` | List, Stats | Navigation graph, because Stats shows the figures of the filtered list |
+| Detail | `ui.detail` | Transaction detail | Destination |
+| Settings | `ui.settings` | Settings | Destination |
+| Mock rules | `ui.mockrules` | Rule list | Destination |
+| Mock editor | `ui.mockeditor` | Rule editor | Destination |
 
 ### Module dependency graph
 
 ```
-        [netscope-ui]
+        [netscope-ui] ───────────► [netscope-export]
+             │ api                        │
+             ▼                            │
+      [netscope-core] ◄───────────────────┘
+             ▲
              │ api
-             ▼
-      [netscope-core]          [netscope-notification]
-             │                          │ api
-             │◄─────────────────────────┘
-             │
-    [netscope-no-op]  ← replaces netscope-core in release builds
+    [netscope-notification]
+
+    [netscope-no-op]  ← replaces the modules above in release builds
 ```
 
 ---
 
 ## Changelog
+
+### v0.7.0
+- **MVI architecture** — every screen now has one state and one intent entry point, with use cases split by area
+- **Live transaction detail** — a pending request fills in as soon as its response is saved; a request deleted while open is reported
+- **Saved Settings apply at startup** — from the first request of the next launch, before the UI is opened
+- **Fixes** — network timing kept when the response is saved, detail screen restored after the app is recreated, notification stops updating once dismissed, no crash when the database is downgraded
+- **First unit tests** — use cases, mock rule matching and every ViewModel
+- **Breaking** — `NetScopeViewModel`, `FilterState` and the screen composables are no longer public; use cases and `SortOrder` moved packages (see [CHANGELOG.md](CHANGELOG.md))
 
 ### v0.6.0
 - **Analytics screen** (Stats tab) — p50/p95/avg latency, status class distribution bar, HTTP method breakdown, response time histogram, top-5 slowest requests (tappable), top-5 hosts
@@ -253,7 +292,7 @@ Compose UI                   ← TransactionListScreen / TransactionDetailScreen
 
 | Version | Planned |
 |---|---|
-| **v0.7.0** | Network graph, export to Postman collection |
+| **v0.8.0** | Network graph, export to Postman collection |
 | **v1.0.0** | Ktor plugin, desktop companion app |
 
 ---
