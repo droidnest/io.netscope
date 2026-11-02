@@ -1,6 +1,8 @@
 package io.netscope.domain.usecase.stats
 
 import io.netscope.fake.aTransaction
+import io.netscope.fake.toSummary
+import io.netscope.model.NetTransaction
 import io.netscope.model.NetTransaction.StatusClass
 import io.netscope.model.TransactionStats
 import io.netscope.model.TransactionStats.DurationBucket
@@ -12,10 +14,12 @@ class ComputeTransactionStatsUseCaseTest {
 
     private val sut = ComputeTransactionStatsUseCase()
 
+    private fun stats(transactions: List<NetTransaction>) = sut(transactions = transactions.map { it.toSummary() })
+
     @Test
     fun `should return empty figures when there are no transactions`() {
         // When
-        val result = sut(transactions = emptyList())
+        val result = stats(transactions = emptyList())
 
         // Then
         assertEquals(
@@ -48,7 +52,7 @@ class ComputeTransactionStatsUseCaseTest {
         )
 
         // When
-        val result = sut(transactions = transactions)
+        val result = stats(transactions = transactions)
 
         // Then
         assertEquals(3, result.errorCount)
@@ -65,7 +69,7 @@ class ComputeTransactionStatsUseCaseTest {
         )
 
         // When
-        val result = sut(transactions = transactions)
+        val result = stats(transactions = transactions)
 
         // Then
         assertEquals(200L, result.avgDurationMs)
@@ -80,7 +84,7 @@ class ComputeTransactionStatsUseCaseTest {
             .mapIndexed { index, duration -> aTransaction(id = index.toLong(), durationMs = duration) }
 
         // When
-        val result = sut(transactions = transactions)
+        val result = stats(transactions = transactions)
 
         // Then
         assertEquals(
@@ -100,7 +104,7 @@ class ComputeTransactionStatsUseCaseTest {
         val transactions = (1L..20L).map { aTransaction(id = it, durationMs = it * 10L) }
 
         // When
-        val result = sut(transactions = transactions.reversed())
+        val result = stats(transactions = transactions.reversed())
 
         // Then
         assertEquals(100L, result.p50Ms)
@@ -117,7 +121,7 @@ class ComputeTransactionStatsUseCaseTest {
         )
 
         // When
-        val result = sut(transactions = transactions)
+        val result = stats(transactions = transactions)
 
         // Then
         assertEquals(listOf("b.com" to 2, "a.com" to 1), result.topHosts)
@@ -131,7 +135,7 @@ class ComputeTransactionStatsUseCaseTest {
         val transactions = (1L..7L).map { aTransaction(id = it, host = "host$it.com", durationMs = it) }
 
         // When
-        val result = sut(transactions = transactions)
+        val result = stats(transactions = transactions)
 
         // Then
         assertEquals(5, result.topHosts.size)
@@ -141,7 +145,7 @@ class ComputeTransactionStatsUseCaseTest {
     @Test
     fun `should have no average when every request is pending`() {
         // When
-        val result = sut(transactions = listOf(aTransaction(responseCode = null, durationMs = null)))
+        val result = stats(transactions = listOf(aTransaction(responseCode = null, durationMs = null)))
 
         // Then
         assertNull(result.avgDurationMs)

@@ -3,12 +3,13 @@ package io.netscope.domain.usecase.stats
 import io.netscope.model.NetTransaction
 import io.netscope.model.TransactionStats
 import io.netscope.model.TransactionStats.DurationBucket
+import io.netscope.model.TransactionSummary
 
 /** Aggregates a list of transactions into the figures of the Stats screen. */
 class ComputeTransactionStatsUseCase {
 
     /** Returns the figures of [transactions], all zero or empty when there are none. */
-    operator fun invoke(transactions: List<NetTransaction>): TransactionStats {
+    operator fun invoke(transactions: List<TransactionSummary>): TransactionStats {
         val durations = transactions.mapNotNull { it.durationMs }.sorted()
         return TransactionStats(
             totalCount        = transactions.size,
@@ -28,12 +29,12 @@ class ComputeTransactionStatsUseCase {
         )
     }
 
-    private fun List<NetTransaction>.successRate(): Float {
+    private fun List<TransactionSummary>.successRate(): Float {
         if (isEmpty()) return 0f
         return count { it.statusClass == NetTransaction.StatusClass.SUCCESS }.toFloat() / size
     }
 
-    private fun <K> List<NetTransaction>.countsBy(key: (NetTransaction) -> K): List<Pair<K, Int>> =
+    private fun <K> List<TransactionSummary>.countsBy(key: (TransactionSummary) -> K): List<Pair<K, Int>> =
         groupingBy(key).eachCount().entries
             .sortedByDescending { it.value }
             .map { it.key to it.value }

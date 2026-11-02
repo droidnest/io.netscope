@@ -9,6 +9,7 @@ import io.netscope.model.NetTransaction
 import io.netscope.model.SettingChange
 import io.netscope.model.Settings
 import io.netscope.model.TrafficSummary
+import io.netscope.model.TransactionSummary
 import io.netscope.shake.NetScopeShakeDetector
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -106,8 +107,10 @@ object NetScope {
         override suspend fun insert(transaction: NetTransaction): Long = 0L
         override suspend fun update(transaction: NetTransaction) = Unit
         override fun observeAll(): Flow<List<NetTransaction>> = flowOf(emptyList())
+        override fun observeSummaries(query: String): Flow<List<TransactionSummary>> = flowOf(emptyList())
         override fun observeSummary(): Flow<TrafficSummary> = flowOf(TrafficSummary(0, 0, null))
         override suspend fun getById(id: Long): NetTransaction? = null
+        override suspend fun getByIds(ids: List<Long>): List<NetTransaction> = emptyList()
         override fun observeById(id: Long): Flow<NetTransaction?> = flowOf(null)
         override suspend fun updateTiming(id: Long, dnsMs: Long?, connectMs: Long?, sslMs: Long?, ttfbMs: Long?) = Unit
         override suspend fun clearAll() = Unit

@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -45,6 +46,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.netscope.model.NetTransaction
+import io.netscope.model.TransactionSummary
 import io.netscope.model.TransactionStats
 import io.netscope.ui.component.ColorAmber
 import io.netscope.ui.component.ColorError
@@ -104,6 +106,8 @@ internal fun StatsScreen(
     val onSurface = NetScopeOnSurface
 
     Scaffold(
+        // The bottom bar of the graph already keeps clear of the navigation bar
+        contentWindowInsets = WindowInsets(0),
         topBar = {
             TopAppBar(
                 title = {
@@ -588,7 +592,7 @@ private fun BucketRow(bucket: DurationBucketUi, maxCount: Int, total: Int) {
 // ── Slowest request row ───────────────────────────────────────────────────────
 
 @Composable
-private fun SlowestRow(rank: Int, tx: NetTransaction, onClick: () -> Unit) {
+private fun SlowestRow(rank: Int, tx: TransactionSummary, onClick: () -> Unit) {
     val durationColor = when {
         (tx.durationMs ?: 0L) <= 300L  -> ColorSuccess
         (tx.durationMs ?: 0L) <= 1000L -> ColorAmber

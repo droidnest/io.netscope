@@ -5,6 +5,7 @@ import io.netscope.domain.repository.TransactionRepository
 import io.netscope.model.MockRule
 import io.netscope.model.NetTransaction
 import io.netscope.model.TrafficSummary
+import io.netscope.model.TransactionSummary
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -42,6 +43,11 @@ class FakeTransactionRepository(
 
     override fun observeAll(): Flow<List<NetTransaction>> = transactions
 
+    override fun observeSummaries(query: String): Flow<List<TransactionSummary>> = transactions.map { list ->
+        list.filter { query.isBlank() || it.url.contains(query, ignoreCase = true) || it.responseBody?.contains(query) == true }
+            .map { it.toSummary() }
+    }
+
     override fun observeSummary(): Flow<TrafficSummary> = transactions.map { list ->
         TrafficSummary(
             requestCount = list.size,
@@ -51,6 +57,9 @@ class FakeTransactionRepository(
     }
 
     override suspend fun getById(id: Long): NetTransaction? = transactions.value.find { it.id == id }
+
+    override suspend fun getByIds(ids: List<Long>): List<NetTransaction> =
+        ids.mapNotNull { id -> transactions.value.find { it.id == id } }
 
     override fun observeById(id: Long): Flow<NetTransaction?> =
         transactions.map { list -> list.find { it.id == id } }
@@ -83,6 +92,20 @@ class FakeMockRuleRepository(
         list.map { if (it.id == id) it.copy(isEnabled = !it.isEnabled) else it }
     }
 }
+
+fun NetTransaction.toSummary() = TransactionSummary(
+    id = id,
+    requestDate = requestDate,
+    durationMs = durationMs,
+    method = method,
+    host = host,
+    path = path,
+    query = query,
+    requestBodySize = requestBodySize,
+    responseCode = responseCode,
+    responseBodySize = responseBodySize,
+    error = error,
+)
 
 fun aTransaction(
     id: Long = 1L,

@@ -10,10 +10,10 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -23,6 +23,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -54,6 +56,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -62,12 +65,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.netscope.export.NetScopeExporter
@@ -92,9 +91,12 @@ import io.netscope.ui.component.NetScopeText2
 import io.netscope.ui.component.StatusBadge
 import io.netscope.ui.component.color
 import io.netscope.ui.component.formatBytes
+import io.netscope.ui.component.scrollIndicator
 import io.netscope.ui.mvi.UiIntent
 import io.netscope.ui.mvi.UiState
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -773,42 +775,62 @@ private fun HttpMessageTab(
     context: android.content.Context,
     onCopied: (String) -> Unit,
 ) {
-    Column(
+    val listState = rememberLazyListState()
+    val formattedBody by produceState<FormattedBody?>(initialValue = null, key1 = body) {
+        value = body?.let { withContext(Dispatchers.Default) { formatBody(body = it) } }
+    }
+
+    LazyColumn(
+        state = listState,
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(vertical = 10.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+            .scrollIndicator(state = listState),
+        contentPadding = PaddingValues(top = 10.dp, bottom = 20.dp),
     ) {
         if (headers.isNotEmpty()) {
-            SectionCard(
-                title    = "Headers (${headers.size})",
-                onCopy   = {
-                    NetScopeExporter.copyToClipboard(context, NetScopeExporter.headersText(headers), headersLabel)
-                    onCopied(headersLabel)
-                },
-                modifier = Modifier.padding(horizontal = 12.dp),
-            ) {
-                HeaderTable(headers)
+            item(key = "headers", contentType = "headers") {
+                SectionCard(
+                    title    = "Headers (${headers.size})",
+                    onCopy   = {
+                        NetScopeExporter.copyToClipboard(context, NetScopeExporter.headersText(headers), headersLabel)
+                        onCopied(headersLabel)
+                    },
+                    modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 8.dp),
+                ) {
+                    HeaderTable(headers)
+                }
             }
         }
         body?.let { b ->
-            SectionCard(
-                title    = "Body",
-                onCopy   = {
-                    NetScopeExporter.copyToClipboard(context, b, bodyLabel)
-                    onCopied(bodyLabel)
-                },
-                modifier = Modifier.padding(horizontal = 12.dp),
-            ) {
-                // empty header only — body rendered separately as json-block
+            item(key = "bodyTitle", contentType = "bodyTitle") {
+                SectionCard(
+                    title    = "Body",
+                    onCopy   = {
+                        NetScopeExporter.copyToClipboard(context, b, bodyLabel)
+                        onCopied(bodyLabel)
+                    },
+                    modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 8.dp),
+                ) {
+                    // empty header only — body rendered separately as json-block
+                }
             }
-            BodyView(b, modifier = Modifier.padding(horizontal = 12.dp))
+            val formatted = formattedBody
+            if (formatted == null) {
+                item(key = "bodyFormatting", contentType = "bodyFormatting") { EmptyTabState("Formatting body…") }
+            } else {
+                items(count = formatted.lines.size, contentType = { "bodyLine" }) { index ->
+                    BodyLine(
+                        line = formatted.lines[index],
+                        kind = formatted.kind,
+                        isFirst = index == 0,
+                        isLast = index == formatted.lines.lastIndex,
+                    )
+                }
+            }
         }
         if (headers.isEmpty() && body == null) {
-            EmptyTabState(emptyMessage)
+            item(key = "empty", contentType = "empty") { EmptyTabState(emptyMessage) }
         }
-        Spacer(Modifier.height(10.dp))
     }
 }
 
@@ -940,26 +962,36 @@ private fun HeaderTable(headers: List<NetHeader>) {
     }
 }
 
+private val BodyEdgeRadius = 12.dp
+
+/** One line of a body. Lines wrap: a shared horizontal scroll cannot span the items of a lazy list. */
 @Composable
-private fun BodyView(body: String, modifier: Modifier = Modifier) {
-    val highlighted = remember(body) { body.highlightedBody() }
-    val scrollState = rememberScrollState()
-    Box(
-        modifier = modifier
+private fun BodyLine(line: String, kind: BodyKind, isFirst: Boolean, isLast: Boolean) {
+    val text = remember(line, kind) { line.highlighted(kind = kind) }
+    Text(
+        text       = text,
+        fontSize   = 10.sp,
+        fontFamily = FontFamily.Monospace,
+        lineHeight = 17.5.sp,
+        modifier   = Modifier
+            .padding(horizontal = 12.dp)
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .border(0.5.dp, NetScopeBorder, RoundedCornerShape(12.dp))
-            .background(NetScopeCardAlt)
-            .horizontalScroll(scrollState)
-            .padding(12.dp),
-    ) {
-        Text(
-            text       = highlighted,
-            fontSize   = 10.sp,
-            fontFamily = FontFamily.Monospace,
-            lineHeight  = 17.5.sp,
-        )
-    }
+            .background(
+                color = NetScopeCardAlt,
+                shape = RoundedCornerShape(
+                    topStart = if (isFirst) BodyEdgeRadius else 0.dp,
+                    topEnd = if (isFirst) BodyEdgeRadius else 0.dp,
+                    bottomStart = if (isLast) BodyEdgeRadius else 0.dp,
+                    bottomEnd = if (isLast) BodyEdgeRadius else 0.dp,
+                ),
+            )
+            .padding(
+                start = 12.dp,
+                end = 12.dp,
+                top = if (isFirst) 12.dp else 0.dp,
+                bottom = if (isLast) 12.dp else 0.dp,
+            ),
+    )
 }
 
 @Composable
@@ -977,144 +1009,3 @@ private fun EmptyTabState(message: String) {
         )
     }
 }
-
-// ── JSON syntax highlighting ──────────────────────────────────────────────────
-
-private val JsonKeyColor     = Color(0xFF7DD3FC)
-private val JsonStringColor  = Color(0xFF86EFAC)
-private val JsonNumberColor  = Color(0xFFFBBF24)
-private val JsonKeywordColor = Color(0xFFA78BFA)
-private val JsonPunctColor   = Color(0xFF6B7FA3)
-private val JsonDefaultColor = Color(0xFFCDD6F4)
-
-private fun String.highlightedBody(): AnnotatedString {
-    val trimmed = trim()
-    return when {
-        trimmed.startsWith("{") || trimmed.startsWith("[") ->
-            buildAnnotatedString { appendJsonHighlighted(trimmed.prettyPrintJson()) }
-        trimmed.startsWith("<") ->
-            buildAnnotatedString { appendXmlHighlighted(trimmed) }
-        else ->
-            buildAnnotatedString { withStyle(SpanStyle(color = JsonDefaultColor)) { append(trimmed) } }
-    }
-}
-
-private fun AnnotatedString.Builder.appendJsonHighlighted(json: String) {
-    var i = 0
-
-    fun peekIsColon(): Boolean {
-        var j = i
-        while (j < json.length && json[j] in " \n\r\t") j++
-        return j < json.length && json[j] == ':'
-    }
-
-    while (i < json.length) {
-        val ch = json[i]
-        when {
-            ch == '"' -> {
-                val start = i
-                i++
-                while (i < json.length) {
-                    when {
-                        json[i] == '\\' -> i += 2
-                        json[i] == '"'  -> { i++; break }
-                        else            -> i++
-                    }
-                }
-                val color = if (peekIsColon()) JsonKeyColor else JsonStringColor
-                withStyle(SpanStyle(color = color)) { append(json.substring(start, i)) }
-            }
-            ch == '-' || ch.isDigit() -> {
-                val start = i
-                if (ch == '-') i++
-                while (i < json.length && (json[i].isDigit() || json[i] == '.' || json[i] in "eE+-")) i++
-                withStyle(SpanStyle(color = JsonNumberColor)) { append(json.substring(start, i)) }
-            }
-            json.startsWith("true",  i) -> { withStyle(SpanStyle(color = JsonKeywordColor)) { append("true")  }; i += 4 }
-            json.startsWith("false", i) -> { withStyle(SpanStyle(color = JsonKeywordColor)) { append("false") }; i += 5 }
-            json.startsWith("null",  i) -> { withStyle(SpanStyle(color = JsonKeywordColor)) { append("null")  }; i += 4 }
-            ch in "{}[],:." -> { withStyle(SpanStyle(color = JsonPunctColor)) { append(ch) }; i++ }
-            else -> { withStyle(SpanStyle(color = JsonDefaultColor)) { append(ch) }; i++ }
-        }
-    }
-}
-
-// ── XML syntax highlighting ───────────────────────────────────────────────────
-
-private fun AnnotatedString.Builder.appendXmlHighlighted(xml: String) {
-    var i = 0
-    while (i < xml.length) {
-        when {
-            xml.startsWith("<!--", i) -> {
-                val end = xml.indexOf("-->", i + 4).let { if (it == -1) xml.length else it + 3 }
-                withStyle(SpanStyle(color = JsonPunctColor)) { append(xml.substring(i, end)) }
-                i = end
-            }
-            xml.startsWith("<?", i) -> {
-                val end = xml.indexOf("?>", i + 2).let { if (it == -1) xml.length else it + 2 }
-                withStyle(SpanStyle(color = JsonKeywordColor)) { append(xml.substring(i, end)) }
-                i = end
-            }
-            xml[i] == '<' -> {
-                withStyle(SpanStyle(color = JsonPunctColor)) { append('<') }
-                i++
-                if (i < xml.length && xml[i] == '/') {
-                    withStyle(SpanStyle(color = JsonPunctColor)) { append('/') }
-                    i++
-                }
-                val nameStart = i
-                while (i < xml.length && xml[i] !in " \t\n\r>/") i++
-                withStyle(SpanStyle(color = JsonKeyColor)) { append(xml.substring(nameStart, i)) }
-                while (i < xml.length && xml[i] != '>' && !(xml[i] == '/' && i + 1 < xml.length && xml[i + 1] == '>')) {
-                    if (xml[i].isWhitespace()) { append(xml[i++]) }
-                    else {
-                        val attrStart = i
-                        while (i < xml.length && xml[i] !in "= \t\n\r>/") i++
-                        withStyle(SpanStyle(color = JsonStringColor)) { append(xml.substring(attrStart, i)) }
-                        if (i < xml.length && xml[i] == '=') {
-                            withStyle(SpanStyle(color = JsonPunctColor)) { append('=') }
-                            i++
-                            if (i < xml.length && xml[i] == '"') {
-                                val q = i++
-                                while (i < xml.length && xml[i] != '"') i++
-                                if (i < xml.length) i++
-                                withStyle(SpanStyle(color = JsonNumberColor)) { append(xml.substring(q, i)) }
-                            }
-                        }
-                    }
-                }
-                if (i < xml.length && xml[i] == '/') { withStyle(SpanStyle(color = JsonPunctColor)) { append('/') }; i++ }
-                if (i < xml.length && xml[i] == '>') { withStyle(SpanStyle(color = JsonPunctColor)) { append('>') }; i++ }
-            }
-            else -> {
-                val start = i
-                while (i < xml.length && xml[i] != '<') i++
-                withStyle(SpanStyle(color = JsonDefaultColor)) { append(xml.substring(start, i)) }
-            }
-        }
-    }
-}
-
-private fun String.prettyPrintJson(): String = try {
-    val sb = StringBuilder()
-    var indent = 0
-    var inString = false
-    var i = 0
-    while (i < length) {
-        val ch = this[i]
-        when {
-            ch == '"' && !inString -> { inString = true;  sb.append(ch) }
-            ch == '"' && inString  -> { inString = false; sb.append(ch) }
-            ch == '\\' && inString -> { sb.append(ch); sb.append(this[++i]) }
-            inString               -> sb.append(ch)
-            ch == '{' || ch == '[' -> { sb.append(ch); sb.append('\n'); indent++; sb.append("  ".repeat(indent)) }
-            ch == '}' || ch == ']' -> { sb.append('\n'); indent--; sb.append("  ".repeat(indent)); sb.append(ch) }
-            ch == ','              -> { sb.append(ch); sb.append('\n'); sb.append("  ".repeat(indent)) }
-            ch == ':'              -> sb.append(": ")
-            ch in " \n\r\t"       -> { /* skip pre-existing whitespace */ }
-            else                   -> sb.append(ch)
-        }
-        i++
-    }
-    sb.toString()
-} catch (_: Exception) { this }

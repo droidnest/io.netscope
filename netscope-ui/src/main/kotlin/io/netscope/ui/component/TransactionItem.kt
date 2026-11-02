@@ -11,15 +11,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -27,11 +22,13 @@ import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.State
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -39,9 +36,17 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.netscope.model.NetTransaction
+import io.netscope.model.TransactionSummary
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+
+private val ChipShape = RoundedCornerShape(6.dp)
+private val RowShape = RoundedCornerShape(10.dp)
+private val StripeWidth = 3.dp
+
+// Rows are composed on the main thread only, and building a format for each costs more than the row
+private val RowTimeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
 
 // ── Chips ─────────────────────────────────────────────────────────────────────
 
@@ -50,8 +55,7 @@ fun MethodChip(method: String, modifier: Modifier = Modifier) {
     val color = method.methodColor()
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(6.dp))
-            .background(color.copy(alpha = 0.15f))
+            .background(color.copy(alpha = 0.15f), ChipShape)
             .padding(horizontal = 6.dp, vertical = 2.dp),
         contentAlignment = Alignment.Center,
     ) {
@@ -76,8 +80,7 @@ fun StatusBadge(code: Int?, statusClass: NetTransaction.StatusClass, modifier: M
     }
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(6.dp))
-            .background(color.copy(alpha = 0.15f))
+            .background(color.copy(alpha = 0.15f), ChipShape)
             .padding(horizontal = 6.dp, vertical = 2.dp),
         contentAlignment = Alignment.Center,
     ) {
@@ -95,55 +98,36 @@ fun StatusBadge(code: Int?, statusClass: NetTransaction.StatusClass, modifier: M
 
 @Composable
 fun TransactionItem(
-    transaction: NetTransaction,
+    transaction: TransactionSummary,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val statusColor = transaction.statusClass.color()
     val isPending = transaction.statusClass == NetTransaction.StatusClass.PENDING
+    val pulse = if (isPending) pendingPulse() else null
 
-    // Pulsing opacity for in-flight requests
-    val stripeAlpha = if (isPending) {
-        val transition = rememberInfiniteTransition(label = "pending")
-        val alpha by transition.animateFloat(
-            initialValue = 0.4f,
-            targetValue = 1f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(800, easing = EaseInOutSine),
-                repeatMode = RepeatMode.Reverse,
-            ),
-            label = "pendingAlpha",
-        )
-        alpha
-    } else 1f
-
-    val timeLabel = remember(transaction.requestDate) {
-        SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(transaction.requestDate))
-    }
+    val timeLabel = remember(transaction.requestDate) { RowTimeFormat.format(Date(transaction.requestDate)) }
+    val sizeLabel = remember(transaction.totalSize) { transaction.totalSize.formatBytes() }
 
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .height(IntrinsicSize.Min)       // lets the accent stripe stretch to content height
-            .clip(RoundedCornerShape(10.dp))
+            .clip(RowShape)
             .background(NetScopeCard)
+            // Left accent stripe. Drawn, so it needs no intrinsic measuring of the row, and read
+            // here so that the pulse redraws the stripe without recomposing the row.
+            .drawBehind {
+                drawRect(
+                    color = statusColor.copy(alpha = pulse?.value ?: 1f),
+                    size = Size(width = StripeWidth.toPx(), height = size.height),
+                )
+            }
             .clickable(onClick = onClick),
     ) {
-        // Left accent stripe — 3dp, full natural height
-        Box(
-            modifier = Modifier
-                .width(3.dp)
-                .fillMaxHeight()
-                .background(
-                    color = statusColor.copy(alpha = stripeAlpha),
-                    shape = RoundedCornerShape(topStart = 10.dp, bottomStart = 10.dp),
-                ),
-        )
-
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 11.dp, vertical = 10.dp),
+                .padding(start = 14.dp, end = 11.dp, top = 10.dp, bottom = 10.dp),
             verticalArrangement = Arrangement.spacedBy(5.dp),
         ) {
             // ── Row 1: method · path · timestamp ─────────────────────────
@@ -195,7 +179,7 @@ fun TransactionItem(
                 }
                 if (transaction.totalSize > 0L) {
                     Text(
-                        text = transaction.totalSize.formatBytes(),
+                        text = sizeLabel,
                         color = NetScopeMuted,
                         fontSize = 9.sp,
                     )
@@ -226,6 +210,19 @@ fun TransactionItem(
         }
     }
 }
+
+/** Pulsing opacity for in-flight requests. */
+@Composable
+private fun pendingPulse(): State<Float> =
+    rememberInfiniteTransition(label = "pending").animateFloat(
+        initialValue = 0.4f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(800, easing = EaseInOutSine),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "pendingAlpha",
+    )
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
