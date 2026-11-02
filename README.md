@@ -264,7 +264,7 @@ never see the ViewModel, and navigation and open dialogs are part of the state.
 - Runtime config updates — settings apply instantly without restarting OkHttp
 - Shake-to-open toggle wired to live detector (start/stop immediately)
 - Notification style: Off / Minimal / Detailed — applied on next transaction event
-- Network phase timing tab with horizontal bar (DNS / Connect / TLS / TTFB / Download)
+- Network phase timing bar in the Overview tab (DNS / Connect / TLS / TTFB)
 - Directional slide animation between detail tabs
 - One-tap copy per field + snackbar feedback
 - `NotificationStyle` enum promoted to `netscope-core` (accessible from notification module)
@@ -273,8 +273,8 @@ never see the ViewModel, and navigation and open dialogs are part of the state.
 
 ### v0.2.0
 - `netscope-notification` module — persistent silent notification with live stats
-- JSON / XML syntax highlighting in request and response bodies
-- Filter chips (method + status class) in a single horizontally scrollable row
+- JSON syntax highlighting in request and response bodies
+- Filter chips (method + status class)
 - Sort menu — time / duration / size
 
 ### v0.1.0

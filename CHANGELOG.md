@@ -4,57 +4,160 @@ All notable changes to NetScope will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 Versioning follows [Semantic Versioning](https://semver.org/).
 
+Planned work is in the [README roadmap](README.md#roadmap).
+
 ---
 
-## [0.7.0] — 2026-11-02
+## [Unreleased]
+
+---
+
+## [0.7.0] - 2026-11-02
+
+### Added
+- `NetScope.settingsRepository` and `NetScope.mockRuleRepository`, with the `SettingsRepository` and
+  `MockRuleRepository` interfaces
+- Use cases for mock rules, settings and transaction stats
+- Unit tests for the use cases, mock rule matching and every ViewModel
 
 ### Changed
 - `netscope-ui` screens follow MVI: one `uiState` and `onIntent` per flow
 - The detail screen follows the transaction live, and says so when it was deleted
 - The Stats response-time chart counts completed requests only
+- **Breaking:** `TransactionRepository` gained `observeById`, so custom implementations must add it
+- **Breaking:** the use cases moved to `io.netscope.domain.usecase.<area>`, and `SortOrder` to
+  `io.netscope.model`
 
-### Added
-- Unit tests for the use cases, mock rule matching and every ViewModel
+### Removed
+- **Breaking:** `NetScopeViewModel`, `FilterState`, `MockRulesViewModel`, `NetScopeNavGraph` and the screen
+  composables are no longer public
+- **Breaking:** `GetTransactionsUseCase` and `GetTransactionByIdUseCase`
 
 ### Fixed
 - Settings saved in the Settings screen apply when the library starts
 - Network timing is kept when the response is saved
 - The detail screen loads from its route argument, so it survives the app being recreated
 - The notification stops updating once it is dismissed
-- A database left by a newer build is rebuilt instead of crashing
+- A database left by a newer build is rebuilt instead of crashing; its captured traffic is lost
 - `netscope-no-op` has the stubs release builds need to compile the README code
 - The Settings screen shows the current version
 
-### Removed
-- **Breaking:** `NetScopeViewModel`, `FilterState`, `MockRulesViewModel` and the screen composables are
-  no longer public
-- **Breaking:** `GetTransactionsUseCase` and `GetTransactionByIdUseCase`; the other use cases moved to
-  `io.netscope.domain.usecase.<area>`, and `SortOrder` to `io.netscope.model`
-
 ---
 
-## [0.1.0] — 2024-XX-XX
+## [0.6.0] - 2026-05-11
 
 ### Added
-- `NetScopeInterceptor` — OkHttp application interceptor
-- Room database for local transaction storage
-- `TransactionListScreen` — Compose UI with live search
-- `TransactionDetailScreen` — tabbed Overview / Request / Response
-- Header redaction (Authorization, Cookie, custom)
-- Gzip response body decoding
-- Auto-prune oldest transactions when limit is exceeded
-- `netscope-no-op` release artifact — zero overhead, no dependencies
+- Stats screen: p50, p95 and average latency, status distribution, method breakdown, response-time
+  histogram, slowest requests and top hosts
+- Bottom navigation bar (Requests, Mock, Stats, Settings), hidden on the detail and editor screens
+
+### Changed
+- Design system v1.0: new colour palette, status and method colours, and redesigned list, mock rule and
+  stat card components
+- The transaction detail Overview and Timing tabs are redesigned
+- The repository moved to the `droidnest` organisation; POM URLs now point to
+  `github.com/droidnest/io.netscope`
+
+### Fixed
+- The status bar inset is no longer counted twice under the nested `Scaffold`
 
 ---
 
-## Upcoming
+## [0.5.0] - 2026-05-02
 
-### [0.2.0]
-- Persistent notification with live request stats
-- Advanced filter chips (method, status range, host)
-- JSON syntax highlighting
+### Added
+- Mock response rules: `NetScopeMockInterceptor` returns a fixture for matching requests without calling
+  the network, and the mocked responses are still recorded
+- Rules match the URL by Contains, Exact or Regex, with an optional HTTP method and delay
+- Screens to list, toggle, delete, create and edit rules; rules persist across app restarts
+- `NetScope.mockInterceptor()`, `NetScope.mockRules` and the add, update, delete and toggle helpers
 
-### [1.0.0]
-- Export as HAR / cURL
-- Request timeline visualization (DNS, TLS, TTFB)
-- Shake-to-open gesture
+### Changed
+- **Breaking:** the Maven group moved from `io.github.nidhal92` to `io.github.droidnest`
+
+---
+
+## [0.4.0] - 2026-04-25
+
+### Added
+- Timing tab in the transaction detail screen, with timestamps, duration and the network phase bar
+- Share a transaction as HAR from the detail screen
+- Export all visible transactions as HAR from the list screen
+- XML syntax highlighting in request and response bodies
+
+### Changed
+- The network phase bar moved from the Overview tab to the Timing tab
+
+---
+
+## [0.3.1] - 2026-04-18
+
+### Changed
+- **Breaking:** `compileSdk` lowered from 36 to 35
+- Dependencies lowered to versions that support `compileSdk` 35: Room 2.7.0, Navigation 2.8.9, Core KTX
+  1.16.0, Lifecycle 2.8.7, Activity Compose 1.9.3 and Compose BOM 2024.12.01
+
+---
+
+## [0.3.0] - 2026-04-17
+
+### Added
+- `netscope-export` module: `NetScopeExporter` with cURL, HAR 1.2 and full-summary output, plus clipboard
+  and share helpers
+- Network phase timing (DNS, connect, TLS, TTFB) through `NetScope.timingListenerFactory()`, shown as a bar
+  in the Overview tab
+- Shake-to-open: `NetScopeShakeDetector`, `NetScope.registerShakeDetector` and `NetScope.setShakeEnabled`
+- Settings screen with capture, privacy, notification and theme settings
+- Light, dark and system themes
+- `NetScope.updateConfig` applies configuration changes without a restart
+- `NotificationStyle`: Off, Minimal or Detailed
+- Copy buttons for each section of the detail screen, with snackbar feedback
+- Consumer ProGuard rules for `netscope-ui` and `netscope-no-op`
+- GitHub Actions workflow that publishes to Maven Central
+
+### Changed
+- The Maven group moved from `io.netscope` to `io.github.nidhal92`
+- List and detail screens redesigned, with a stats bar and animated tab transitions
+- The database moved to version 2 with a migration that adds the timing columns
+
+---
+
+## [0.2.0] - 2026-04-13
+
+Date of the commit that added this work. The `v0.2.0` tag does not contain it: the tag sits on an earlier
+commit than `v0.1.0`, and no build carried this version number. These changes first shipped in 0.3.0.
+
+### Added
+- `netscope-notification` module: a persistent silent notification with live request and error counts
+- Filter chips for HTTP method and status class
+- Sort menu: time, duration or size
+- JSON syntax highlighting in request and response bodies
+- `NetScopeActivity.launchIntent()` and `launchPendingIntent()`
+- `:sample` demo app
+
+### Changed
+- **Breaking:** `minSdk` raised from 21 to 23
+
+---
+
+## [0.1.0] - 2026-03-16
+
+### Added
+- `NetScopeInterceptor`: OkHttp application interceptor
+- Room database for local transaction storage
+- `TransactionListScreen`: Compose UI with live search
+- `TransactionDetailScreen`: tabbed Overview, Request and Response
+- Header redaction (Authorization, Cookie, custom)
+- Gzip response body decoding
+- Auto-prune oldest transactions when the limit is exceeded
+- `netscope-no-op` release artifact: zero overhead, no dependencies
+
+[Unreleased]: https://github.com/droidnest/io.netscope/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/droidnest/io.netscope/compare/v0.6.0...v0.7.0
+[0.6.0]: https://github.com/droidnest/io.netscope/compare/v0.5.0...v0.6.0
+[0.5.0]: https://github.com/droidnest/io.netscope/compare/v0.4.0...v0.5.0
+[0.4.0]: https://github.com/droidnest/io.netscope/compare/v0.3.1...v0.4.0
+[0.3.1]: https://github.com/droidnest/io.netscope/compare/v0.3.0...v0.3.1
+[0.3.0]: https://github.com/droidnest/io.netscope/compare/v0.1.0...v0.3.0
+[0.2.0]: https://github.com/droidnest/io.netscope/commit/e9256b2
+[0.1.0]: https://github.com/droidnest/io.netscope/tree/v0.1.0
