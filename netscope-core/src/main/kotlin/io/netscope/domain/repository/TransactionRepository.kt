@@ -3,6 +3,7 @@ package io.netscope.domain.repository
 import io.netscope.model.NetTransaction
 import kotlinx.coroutines.flow.Flow
 
+/** The captured transactions, stored in the NetScope database. */
 interface TransactionRepository {
     /** Inserts a transaction and returns its generated ID. */
     suspend fun insert(transaction: NetTransaction): Long
@@ -18,6 +19,9 @@ interface TransactionRepository {
 
     /** Returns a single transaction by ID, or null if not found. */
     suspend fun getById(id: Long): NetTransaction?
+
+    /** Emits the transaction with this [id] on every change, or null once it is deleted. */
+    fun observeById(id: Long): Flow<NetTransaction?>
 
     /** Updates only the network-phase timing columns (DNS / Connect / TLS / TTFB). */
     suspend fun updateTiming(id: Long, dnsMs: Long?, connectMs: Long?, sslMs: Long?, ttfbMs: Long?)

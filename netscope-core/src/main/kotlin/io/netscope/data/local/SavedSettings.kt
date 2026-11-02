@@ -4,13 +4,14 @@ import android.content.Context
 import android.content.SharedPreferences
 import io.netscope.NetScopeConfig
 import io.netscope.NotificationStyle
+import io.netscope.model.SettingChange
 
 /**
- * Reads the settings the NetScope Settings screen saves, so that what the user chose there
- * applies from the first request of the next launch, before the UI is ever opened.
+ * Reads and writes the settings the NetScope Settings screen saves, so that what the user chose
+ * there applies from the first request of the next launch, before the UI is ever opened.
  *
- * `NetScopePreferences` in netscope-ui writes these values: the file name and the keys below
- * must stay identical to its own.
+ * `NetScopePreferences` in netscope-ui, public for the host app, uses the same values: the file
+ * name and the keys below must stay identical to its own.
  */
 internal class SavedSettings(context: Context) {
 
@@ -35,6 +36,20 @@ internal class SavedSettings(context: Context) {
     /** The saved shake-to-open choice, or null when the user never changed it. */
     val shakeToOpen: Boolean?
         get() = prefs.booleanOrNull(KEY_SHAKE)
+
+    /** Saves [change] under the key `NetScopePreferences` reads and writes. */
+    fun save(change: SettingChange) {
+        val editor = prefs.edit()
+        when (change) {
+            is SettingChange.MaxTransactions        -> editor.putInt(KEY_MAX_TX, change.count)
+            is SettingChange.MaxBodySize            -> editor.putLong(KEY_MAX_BODY, change.bytes)
+            is SettingChange.AlwaysReadResponseBody -> editor.putBoolean(KEY_ALWAYS_READ, change.isEnabled)
+            is SettingChange.RedactedHeaders        -> editor.putStringSet(KEY_REDACTED, change.headers)
+            is SettingChange.ShakeToOpen            -> editor.putBoolean(KEY_SHAKE, change.isEnabled)
+            is SettingChange.Notifications          -> editor.putString(KEY_NOTIF_STYLE, change.style.key)
+        }
+        editor.apply()
+    }
 
     private fun savedRedactedHeaders(): Set<String> =
         prefs.getStringSet(KEY_REDACTED, null).orEmpty().map { it.lowercase() }.toSet()

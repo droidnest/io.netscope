@@ -3,12 +3,15 @@ package io.netscope
 import android.content.Context
 import io.netscope.data.db.NetScopeDatabase
 import io.netscope.data.local.SavedSettings
+import io.netscope.data.repository.MockRuleRepositoryImpl
+import io.netscope.data.repository.SettingsRepositoryImpl
 import io.netscope.data.repository.TransactionRepositoryImpl
+import io.netscope.domain.repository.MockRuleRepository
+import io.netscope.domain.repository.SettingsRepository
 import io.netscope.domain.repository.TransactionRepository
 import io.netscope.interceptor.NetScopeMockInterceptor
 import io.netscope.interceptor.NetScopeInterceptor
 import io.netscope.interceptor.NetScopeTimingListenerFactory
-import io.netscope.mock.MockRuleStore
 import io.netscope.model.MockRule
 import io.netscope.shake.NetScopeShakeDetector
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -31,25 +34,40 @@ import kotlinx.coroutines.flow.StateFlow
  */
 object NetScope {
 
+    /** The captured transactions. Read by the NetScope UI and notification; available after [interceptor]. */
     lateinit var repository: TransactionRepository
+        private set
+
+    /** The saved and running settings. Read by the NetScope UI; available after [interceptor]. */
+    lateinit var settingsRepository: SettingsRepository
         private set
 
     // ── Mock rules ────────────────────────────────────────────────────────────
 
-    private var mockRuleStore: MockRuleStore? = null
+    private var mockRuleStore: MockRuleRepository? = null
     private val _emptyRules = MutableStateFlow<List<MockRule>>(emptyList())
+
+    /** The configured mock rules. Read by the NetScope UI; available after [interceptor]. */
+    val mockRuleRepository: MockRuleRepository
+        get() = checkNotNull(mockRuleStore) { "Call NetScope.interceptor(context) first." }
 
     /** Live list of all configured mock rules. Observe in the UI via a ViewModel. */
     val mockRules: StateFlow<List<MockRule>>
         get() = mockRuleStore?.rules ?: _emptyRules
 
+    /** Appends [rule]; ignored before [interceptor] is called. */
     fun addMockRule(rule: MockRule)      = mockRuleStore?.add(rule)
+    /** Replaces the rule with the same id; ignored before [interceptor] is called. */
     fun updateMockRule(rule: MockRule)   = mockRuleStore?.update(rule)
+    /** Removes the rule with this [id]; ignored before [interceptor] is called. */
     fun deleteMockRule(id: String)       = mockRuleStore?.delete(id)
+    /** Enables or disables the rule with this [id]; ignored before [interceptor] is called. */
     fun toggleMockRule(id: String)       = mockRuleStore?.toggle(id)
 
     // Active config — kept in sync with the running interceptor and repository.
     private lateinit var _config: NetScopeConfig
+
+    /** The configuration the library runs with; available after [interceptor]. */
     val config: NetScopeConfig get() = _config
 
     private var initialized = false
@@ -156,15 +174,15 @@ object NetScope {
 
     // ── Internal ──────────────────────────────────────────────────────────────
 
-
     private fun init(context: Context, config: NetScopeConfig) {
         val db = NetScopeDatabase.getInstance(context)
         val savedSettings = SavedSettings(context)
         _config = savedSettings.applyTo(config)
         repository = TransactionRepositoryImpl(db.transactionDao(), _config)
+        settingsRepository = SettingsRepositoryImpl(savedSettings = savedSettings)
         savedSettings.notificationStyle?.let { notificationStyle = it }
         savedSettings.shakeToOpen?.let { shakeEnabled = it }
-        if (mockRuleStore == null) mockRuleStore = MockRuleStore(context)
+        if (mockRuleStore == null) mockRuleStore = MockRuleRepositoryImpl(context)
         initialized = true
     }
 

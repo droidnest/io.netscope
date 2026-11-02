@@ -1,16 +1,15 @@
 package io.netscope.interceptor
 
 import io.netscope.domain.repository.TransactionRepository
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import okhttp3.Call
-import okhttp3.Connection
 import okhttp3.EventListener
 import okhttp3.Handshake
 import okhttp3.Protocol
-import okhttp3.Response
 import java.io.IOException
 import java.net.InetAddress
 import java.net.InetSocketAddress
@@ -38,12 +37,13 @@ import java.util.concurrent.ConcurrentHashMap
  */
 class NetScopeTimingListenerFactory internal constructor(
     private val repository: TransactionRepository,
+    ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : EventListener.Factory {
 
     // Call → DB row id.  Written by the interceptor via register(), read by the listener.
     private val pendingIds: ConcurrentHashMap<Call, Long> = ConcurrentHashMap()
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val scope = CoroutineScope(SupervisorJob() + ioDispatcher)
 
     /** Called by [NetScopeInterceptor] after the transaction row is inserted. */
     internal fun register(call: Call, transactionId: Long) {

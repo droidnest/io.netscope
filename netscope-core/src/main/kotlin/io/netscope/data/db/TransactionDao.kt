@@ -23,6 +23,9 @@ interface TransactionDao {
     @Query("SELECT * FROM transactions WHERE id = :id LIMIT 1")
     suspend fun getById(id: Long): TransactionEntity?
 
+    @Query("SELECT * FROM transactions WHERE id = :id LIMIT 1")
+    fun observeById(id: Long): Flow<TransactionEntity?>
+
     @Query("DELETE FROM transactions")
     suspend fun deleteAll()
 

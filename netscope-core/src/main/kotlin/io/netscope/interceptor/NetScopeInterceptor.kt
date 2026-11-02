@@ -4,6 +4,7 @@ import io.netscope.NetScopeConfig
 import io.netscope.domain.repository.TransactionRepository
 import io.netscope.model.NetHeader
 import io.netscope.model.NetTransaction
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -31,9 +32,10 @@ class NetScopeInterceptor internal constructor(
     internal var config: NetScopeConfig,
     /** Optional timing factory — when set, the interceptor registers call→id mappings. */
     internal var timingFactory: NetScopeTimingListenerFactory? = null,
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : Interceptor {
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val scope = CoroutineScope(SupervisorJob() + ioDispatcher)
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
@@ -97,7 +99,7 @@ class NetScopeInterceptor internal constructor(
         var id = 0L
         // We use runBlocking here intentionally — the partial record must be
         // inserted before the network call returns so the UI reflects "pending".
-        kotlinx.coroutines.runBlocking(Dispatchers.IO) {
+        kotlinx.coroutines.runBlocking(ioDispatcher) {
             id = repository.insert(transaction)
         }
         return id
