@@ -1,4 +1,4 @@
-package io.netscope.ui.screen
+package io.netscope.ui.mockeditor
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -38,9 +38,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -67,37 +66,34 @@ import io.netscope.ui.component.NetScopeOnSurface
 import io.netscope.ui.component.NetScopeSurface
 import io.netscope.ui.component.methodColor
 import io.netscope.ui.component.statusColor
-import io.netscope.ui.viewmodel.MockRulesViewModel
+import io.netscope.ui.mvi.UiIntent
+import io.netscope.ui.mvi.UiState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MockRuleEditorScreen(
-    viewModel: MockRulesViewModel,
-    ruleId: String?,
+internal fun MockRuleEditorScreen(
+    uiState: UiState<MockRuleEditorUiState>,
+    onIntent: (UiIntent) -> Unit,
     onBack: () -> Unit,
 ) {
-    val existing = ruleId?.let { viewModel.findById(it) }
+    val state = uiState.dataOrNull() ?: return
+    val form = state.form
+    val statusCodeInt = form.statusCodeValue
+    val isValid = form.isValid
 
-    var name        by rememberSaveable { mutableStateOf(existing?.name ?: "") }
-    var urlPattern  by rememberSaveable { mutableStateOf(existing?.urlPattern ?: "") }
-    var matchType   by rememberSaveable { mutableStateOf(existing?.matchType ?: MockRule.MatchType.CONTAINS) }
-    var method      by rememberSaveable { mutableStateOf(existing?.method) }
-    var statusCode  by rememberSaveable { mutableStateOf(existing?.statusCode?.toString() ?: "200") }
-    var contentType by rememberSaveable { mutableStateOf(existing?.contentType ?: "application/json") }
-    var body        by rememberSaveable { mutableStateOf(existing?.responseBody ?: "{}") }
-    var delayMs     by rememberSaveable { mutableStateOf(existing?.delayMs?.toString() ?: "0") }
-    var enabled     by rememberSaveable { mutableStateOf(existing?.isEnabled ?: true) }
-
-    val statusCodeInt = statusCode.toIntOrNull()
-    val isValid = name.isNotBlank() && urlPattern.isNotBlank() &&
-        statusCodeInt?.let { it in 100..599 } == true
+    if (state is MockRuleEditorUiState.Navigating) {
+        LaunchedEffect(key1 = state) {
+            onBack()
+            onIntent(MockRuleEditorUiIntent.NavigationHandled)
+        }
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
                     Text(
-                        text = if (existing == null) "New Rule" else "Edit Rule",
+                        text = if (form.ruleId == null) "New Rule" else "Edit Rule",
                         fontWeight = FontWeight.Bold,
                         fontSize = 17.sp,
                         color = NetScopeOnSurface,
@@ -123,24 +119,7 @@ fun MockRuleEditorScreen(
                             .padding(end = 12.dp)
                             .clip(RoundedCornerShape(6.dp))
                             .background(if (isValid) accent else NetScopeMuted.copy(alpha = 0.3f))
-                            .clickable(enabled = isValid) {
-                                val code = statusCodeInt ?: 200
-                                val delay = delayMs.toLongOrNull() ?: 0L
-                                val rule = MockRule(
-                                    id           = existing?.id ?: java.util.UUID.randomUUID().toString(),
-                                    name         = name.trim(),
-                                    urlPattern   = urlPattern.trim(),
-                                    matchType    = matchType,
-                                    method       = method,
-                                    statusCode   = code,
-                                    contentType  = contentType.trim(),
-                                    responseBody = body,
-                                    delayMs      = delay,
-                                    isEnabled    = enabled,
-                                )
-                                if (existing == null) viewModel.add(rule) else viewModel.update(rule)
-                                onBack()
-                            }
+                            .clickable(enabled = isValid) { onIntent(MockRuleEditorUiIntent.SaveClicked) }
                             .padding(horizontal = 14.dp, vertical = 6.dp),
                         contentAlignment = Alignment.Center,
                     ) {
@@ -172,12 +151,12 @@ fun MockRuleEditorScreen(
                 icon = Icons.Outlined.Link,
             ) {
                 FieldLabel("RULE NAME")
-                EditorTextField(value = name, onValueChange = { name = it }, placeholder = "e.g. Mock login endpoint")
+                EditorTextField(value = form.name, onValueChange = { onIntent(MockRuleEditorUiIntent.NameTyped(name = it)) }, placeholder = "e.g. Mock login endpoint")
 
                 FieldLabel("URL PATTERN")
                 EditorTextField(
-                    value = urlPattern,
-                    onValueChange = { urlPattern = it },
+                    value = form.urlPattern,
+                    onValueChange = { onIntent(MockRuleEditorUiIntent.UrlPatternTyped(urlPattern = it)) },
                     placeholder = "/api/login",
                     fontFamily = FontFamily.Monospace,
                 )
@@ -186,8 +165,8 @@ fun MockRuleEditorScreen(
                 val accent = NetScopeAccent
                 SegmentedPicker(
                     options = MockRule.MatchType.values().toList(),
-                    selected = matchType,
-                    onSelect = { matchType = it },
+                    selected = form.matchType,
+                    onSelect = { onIntent(MockRuleEditorUiIntent.MatchTypeSelected(matchType = it)) },
                     label = { it.label },
                     chipColor = { accent },
                 )
@@ -197,8 +176,8 @@ fun MockRuleEditorScreen(
                 val methods = listOf(null, "GET", "POST", "PUT", "PATCH", "DELETE")
                 SegmentedPicker(
                     options = methods,
-                    selected = method,
-                    onSelect = { method = it },
+                    selected = form.method,
+                    onSelect = { onIntent(MockRuleEditorUiIntent.MethodSelected(method = it)) },
                     label = { it ?: "ANY" },
                     chipColor = { opt -> opt?.let { it.methodColor() } ?: muted },
                 )
@@ -216,8 +195,8 @@ fun MockRuleEditorScreen(
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     EditorTextField(
-                        value = statusCode,
-                        onValueChange = { statusCode = it.filter(Char::isDigit).take(3) },
+                        value = form.statusCode,
+                        onValueChange = { onIntent(MockRuleEditorUiIntent.StatusCodeTyped(statusCode = it)) },
                         placeholder = "200",
                         keyboardType = KeyboardType.Number,
                         modifier = Modifier.weight(1f),
@@ -233,16 +212,16 @@ fun MockRuleEditorScreen(
 
                 FieldLabel("CONTENT-TYPE")
                 EditorTextField(
-                    value = contentType,
-                    onValueChange = { contentType = it },
+                    value = form.contentType,
+                    onValueChange = { onIntent(MockRuleEditorUiIntent.ContentTypeTyped(contentType = it)) },
                     placeholder = "application/json",
                     fontFamily = FontFamily.Monospace,
                 )
 
                 FieldLabel("RESPONSE BODY")
                 EditorTextField(
-                    value = body,
-                    onValueChange = { body = it },
+                    value = form.body,
+                    onValueChange = { onIntent(MockRuleEditorUiIntent.BodyTyped(body = it)) },
                     placeholder = "{}",
                     fontFamily = FontFamily.Monospace,
                     singleLine = false,
@@ -262,8 +241,8 @@ fun MockRuleEditorScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     EditorTextField(
-                        value = delayMs,
-                        onValueChange = { delayMs = it.filter(Char::isDigit).take(6) },
+                        value = form.delayMs,
+                        onValueChange = { onIntent(MockRuleEditorUiIntent.DelayTyped(delayMs = it)) },
                         placeholder = "0",
                         keyboardType = KeyboardType.Number,
                         modifier = Modifier.weight(1f),
@@ -278,13 +257,13 @@ fun MockRuleEditorScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
                     Text(
-                        text = if (enabled) "Enabled — active immediately" else "Disabled — rule inactive",
-                        color = if (enabled) NetScopeOnSurface else NetScopeMuted,
+                        text = if (form.isEnabled) "Enabled — active immediately" else "Disabled — rule inactive",
+                        color = if (form.isEnabled) NetScopeOnSurface else NetScopeMuted,
                         fontSize = 12.sp,
                     )
                     Switch(
-                        checked = enabled,
-                        onCheckedChange = { enabled = it },
+                        checked = form.isEnabled,
+                        onCheckedChange = { onIntent(MockRuleEditorUiIntent.EnabledToggled(isEnabled = it)) },
                         colors = SwitchDefaults.colors(
                             checkedThumbColor    = Color.White,
                             checkedTrackColor    = NetScopeAccent,
@@ -298,7 +277,7 @@ fun MockRuleEditorScreen(
             }
 
             // ── Live rule preview ──────────────────────────────────────────
-            RulePreview(method = method, matchType = matchType, urlPattern = urlPattern, statusCode = statusCodeInt)
+            RulePreview(method = form.method, matchType = form.matchType, urlPattern = form.urlPattern, statusCode = statusCodeInt)
 
             Spacer(Modifier.height(8.dp))
         }

@@ -6,20 +6,10 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoGraph
 import androidx.compose.material.icons.outlined.GridOn
@@ -34,15 +24,14 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -54,17 +43,21 @@ import io.netscope.ui.component.NetScopeAccent
 import io.netscope.ui.component.NetScopeBorder
 import io.netscope.ui.component.NetScopeDarkBackground
 import io.netscope.ui.component.NetScopeMuted
-import io.netscope.ui.component.NetScopeOnSurface
 import io.netscope.ui.component.NetScopeSurface
+import io.netscope.ui.detail.TransactionDetailScreen
+import io.netscope.ui.detail.TransactionDetailUiIntent
+import io.netscope.ui.detail.TransactionDetailViewModel
+import io.netscope.ui.mockeditor.MockRuleEditorScreen
+import io.netscope.ui.mockeditor.MockRuleEditorUiIntent
+import io.netscope.ui.mockeditor.MockRuleEditorViewModel
+import io.netscope.ui.mockrules.MockRulesScreen
+import io.netscope.ui.mockrules.MockRulesViewModel
 import io.netscope.ui.preferences.ThemeMode
-import io.netscope.ui.screen.MockRuleEditorScreen
-import io.netscope.ui.screen.MockRulesScreen
-import io.netscope.ui.screen.SettingsScreen
-import io.netscope.ui.screen.StatsScreen
-import io.netscope.ui.screen.TransactionDetailScreen
-import io.netscope.ui.screen.TransactionListScreen
-import io.netscope.ui.viewmodel.MockRulesViewModel
-import io.netscope.ui.viewmodel.NetScopeViewModel
+import io.netscope.ui.settings.SettingsScreen
+import io.netscope.ui.settings.SettingsViewModel
+import io.netscope.ui.transactions.TransactionsViewModel
+import io.netscope.ui.transactions.list.TransactionListScreen
+import io.netscope.ui.transactions.stats.StatsScreen
 
 private const val ROUTE_LIST        = "list"
 private const val ROUTE_DETAIL      = "detail/{transactionId}"
@@ -90,13 +83,14 @@ private val BOTTOM_NAV_ITEMS = listOf(
 private val PRIMARY_ROUTES = setOf(ROUTE_LIST, ROUTE_MOCK_RULES, ROUTE_STATS, ROUTE_SETTINGS)
 
 @Composable
-fun NetScopeNavGraph(
+internal fun NetScopeNavGraph(
     navController: NavHostController,
     themeMode: ThemeMode,
     onThemeChange: (ThemeMode) -> Unit,
 ) {
-    val viewModel: NetScopeViewModel = viewModel(factory = NetScopeViewModel.Factory())
-    val mockViewModel: MockRulesViewModel = viewModel(factory = MockRulesViewModel.Factory())
+    // Scoped to the graph: the list and the Stats screen are one flow, and the Stats screen shows
+    // the figures of the filtered list.
+    val transactionsViewModel: TransactionsViewModel = viewModel(factory = TransactionsViewModel.Factory())
 
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
@@ -131,14 +125,17 @@ fun NetScopeNavGraph(
 
             composable(ROUTE_LIST) {
                 TransactionListScreen(
-                    viewModel          = viewModel,
-                    onTransactionClick = { id -> navController.navigate("detail/$id") },
+                    uiState           = transactionsViewModel.uiState.collectAsStateWithLifecycle().value,
+                    onIntent          = transactionsViewModel::onIntent,
+                    onOpenTransaction = { id -> navController.openTransaction(id = id) },
                 )
             }
 
             composable(ROUTE_MOCK_RULES) {
+                val viewModel: MockRulesViewModel = viewModel(factory = MockRulesViewModel.Factory())
                 MockRulesScreen(
-                    viewModel  = mockViewModel,
+                    uiState    = viewModel.uiState.collectAsStateWithLifecycle().value,
+                    onIntent   = viewModel::onIntent,
                     onBack     = { navController.popBackStack() },
                     onAddRule  = { navController.navigate(ROUTE_MOCK_ADD) },
                     onEditRule = { id -> navController.navigate("mock_rules/edit/$id") },
@@ -147,15 +144,18 @@ fun NetScopeNavGraph(
 
             composable(ROUTE_STATS) {
                 StatsScreen(
-                    viewModel          = viewModel,
-                    onTransactionClick = { id -> navController.navigate("detail/$id") },
+                    uiState           = transactionsViewModel.uiState.collectAsStateWithLifecycle().value,
+                    onIntent          = transactionsViewModel::onIntent,
+                    onOpenTransaction = { id -> navController.openTransaction(id = id) },
                 )
             }
 
             composable(ROUTE_SETTINGS) {
+                val viewModel: SettingsViewModel = viewModel(factory = SettingsViewModel.Factory())
                 SettingsScreen(
+                    uiState       = viewModel.uiState.collectAsStateWithLifecycle().value,
+                    onIntent      = viewModel::onIntent,
                     onBack        = { navController.popBackStack() },
-                    onClearAll    = { viewModel.clearAllTransactions() },
                     currentTheme  = themeMode,
                     onThemeChange = onThemeChange,
                 )
@@ -167,26 +167,28 @@ fun NetScopeNavGraph(
                 route     = ROUTE_DETAIL,
                 arguments = listOf(navArgument("transactionId") { type = NavType.LongType }),
             ) { backStack ->
-                // Load from the route's argument, not from a selection made before navigating:
-                // when Android recreates the screen, only the argument survives
+                val viewModel: TransactionDetailViewModel = viewModel(factory = TransactionDetailViewModel.Factory())
+                // Load from the route's argument: when Android recreates the screen, only it survives
                 val transactionId = backStack.arguments?.getLong("transactionId")
-                LaunchedEffect(transactionId) {
-                    transactionId?.let { viewModel.selectTransaction(it) }
+                LaunchedEffect(Unit) {
+                    transactionId?.let { viewModel.onIntent(TransactionDetailUiIntent.Started(transactionId = it)) }
                 }
                 TransactionDetailScreen(
-                    viewModel = viewModel,
-                    onBack    = {
-                        viewModel.clearSelection()
-                        navController.popBackStack()
-                    },
+                    uiState  = viewModel.uiState.collectAsStateWithLifecycle().value,
+                    onIntent = viewModel::onIntent,
+                    onBack   = { navController.popBackStack() },
                 )
             }
 
             composable(ROUTE_MOCK_ADD) {
+                val viewModel: MockRuleEditorViewModel = viewModel(factory = MockRuleEditorViewModel.Factory())
+                LaunchedEffect(Unit) {
+                    viewModel.onIntent(MockRuleEditorUiIntent.Started(ruleId = null))
+                }
                 MockRuleEditorScreen(
-                    viewModel = mockViewModel,
-                    ruleId    = null,
-                    onBack    = { navController.popBackStack() },
+                    uiState  = viewModel.uiState.collectAsStateWithLifecycle().value,
+                    onIntent = viewModel::onIntent,
+                    onBack   = { navController.popBackStack() },
                 )
             }
 
@@ -194,14 +196,24 @@ fun NetScopeNavGraph(
                 route     = ROUTE_MOCK_EDIT,
                 arguments = listOf(navArgument("ruleId") { type = NavType.StringType }),
             ) { backStack ->
+                val viewModel: MockRuleEditorViewModel = viewModel(factory = MockRuleEditorViewModel.Factory())
+                val ruleId = backStack.arguments?.getString("ruleId")
+                LaunchedEffect(Unit) {
+                    viewModel.onIntent(MockRuleEditorUiIntent.Started(ruleId = ruleId))
+                }
                 MockRuleEditorScreen(
-                    viewModel = mockViewModel,
-                    ruleId    = backStack.arguments?.getString("ruleId"),
-                    onBack    = { navController.popBackStack() },
+                    uiState  = viewModel.uiState.collectAsStateWithLifecycle().value,
+                    onIntent = viewModel::onIntent,
+                    onBack   = { navController.popBackStack() },
                 )
             }
         }
     }
+}
+
+// Single top: during a tab crossfade the list and the Stats screen can both react to the same state
+private fun NavHostController.openTransaction(id: Long) {
+    navigate(route = "detail/$id") { launchSingleTop = true }
 }
 
 // ── Bottom navigation bar ─────────────────────────────────────────────────────

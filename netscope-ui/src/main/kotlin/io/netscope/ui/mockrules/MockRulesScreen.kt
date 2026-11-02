@@ -1,4 +1,4 @@
-package io.netscope.ui.screen
+package io.netscope.ui.mockrules
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
@@ -44,7 +44,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -68,17 +68,30 @@ import io.netscope.ui.component.NetScopeSurface
 import io.netscope.ui.component.ColorError
 import io.netscope.ui.component.NetScopeText2
 import io.netscope.ui.component.methodColor
-import io.netscope.ui.viewmodel.MockRulesViewModel
+import io.netscope.ui.mvi.UiIntent
+import io.netscope.ui.mvi.UiState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MockRulesScreen(
-    viewModel: MockRulesViewModel,
+internal fun MockRulesScreen(
+    uiState: UiState<MockRulesUiState>,
+    onIntent: (UiIntent) -> Unit,
     onBack: () -> Unit,
     onAddRule: () -> Unit,
     onEditRule: (String) -> Unit,
 ) {
-    val rules by viewModel.rules.collectAsState()
+    val state = uiState.dataOrNull() ?: return
+    val rules = state.rules
+
+    if (state is MockRulesUiState.Navigating) {
+        LaunchedEffect(key1 = state.destination) {
+            when (val destination = state.destination) {
+                MockRulesDestination.NewRule     -> onAddRule()
+                is MockRulesDestination.EditRule -> onEditRule(destination.id)
+            }
+            onIntent(MockRulesUiIntent.NavigationHandled)
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -150,7 +163,7 @@ fun MockRulesScreen(
         },
         floatingActionButton = {
             FloatingActionButton(
-                onClick = onAddRule,
+                onClick = { onIntent(MockRulesUiIntent.AddClicked) },
                 containerColor = NetScopeAccent,
                 contentColor = Color.White,
                 elevation = FloatingActionButtonDefaults.elevation(0.dp),
@@ -162,7 +175,7 @@ fun MockRulesScreen(
         containerColor = NetScopeDarkBackground,
     ) { innerPadding ->
         if (rules.isEmpty()) {
-            MockRulesEmptyState(onAddRule = onAddRule, modifier = Modifier.padding(innerPadding))
+            MockRulesEmptyState(onAddRule = { onIntent(MockRulesUiIntent.AddClicked) }, modifier = Modifier.padding(innerPadding))
         } else {
             LazyColumn(
                 contentPadding = PaddingValues(
@@ -185,9 +198,9 @@ fun MockRulesScreen(
                 items(rules, key = { it.id }) { rule ->
                     MockRuleItem(
                         rule     = rule,
-                        onToggle = { viewModel.toggle(rule.id) },
-                        onEdit   = { onEditRule(rule.id) },
-                        onDelete = { viewModel.delete(rule.id) },
+                        onToggle = { onIntent(MockRulesUiIntent.RuleToggled(id = rule.id)) },
+                        onEdit   = { onIntent(MockRulesUiIntent.RuleClicked(id = rule.id)) },
+                        onDelete = { onIntent(MockRulesUiIntent.RuleDeleted(id = rule.id)) },
                         modifier = Modifier.animateItem(),
                     )
                 }

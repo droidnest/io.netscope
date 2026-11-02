@@ -1,4 +1,4 @@
-package io.netscope.ui.screen
+package io.netscope.ui.detail
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
@@ -34,6 +34,8 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -51,10 +53,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -78,7 +77,6 @@ import io.netscope.ui.component.MethodChip
 import io.netscope.ui.component.NetScopeAccent
 import io.netscope.ui.component.NetScopeBorder
 import io.netscope.ui.component.NetScopeCard
-import io.netscope.ui.component.NetScopeCode
 import io.netscope.ui.component.NetScopeDarkBackground
 import io.netscope.ui.component.NetScopeDropdown
 import io.netscope.ui.component.NetScopeMuted
@@ -94,6 +92,8 @@ import io.netscope.ui.component.NetScopeText2
 import io.netscope.ui.component.StatusBadge
 import io.netscope.ui.component.color
 import io.netscope.ui.component.formatBytes
+import io.netscope.ui.mvi.UiIntent
+import io.netscope.ui.mvi.UiState
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -101,14 +101,13 @@ import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TransactionDetailScreen(
-    viewModel: io.netscope.ui.viewmodel.NetScopeViewModel,
+internal fun TransactionDetailScreen(
+    uiState: UiState<TransactionDetailUiState>,
+    onIntent: (UiIntent) -> Unit,
     onBack: () -> Unit,
 ) {
-    val transaction by viewModel.selectedTransaction.collectAsState()
-    var selectedTab by remember { mutableIntStateOf(0) }
-    var previousTab by remember { mutableIntStateOf(0) }
-    var overflowExpanded by remember { mutableStateOf(false) }
+    val detail = uiState.dataOrNull()
+    val selectedTab = detail?.selectedTab ?: 0
     val tabs = listOf("Overview", "Request", "Response", "Timing")
     val context = LocalContext.current
 
@@ -126,7 +125,29 @@ fun TransactionDetailScreen(
         }
     }
 
-    transaction?.let { tx ->
+    if (uiState is UiState.Error) {
+        AlertDialog(
+            onDismissRequest = {
+                onIntent(TransactionDetailUiIntent.ErrorShown)
+                onBack()
+            },
+            containerColor = NetScopeCard,
+            text = { Text(text = uiState.message.orEmpty(), color = NetScopeOnSurface) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onIntent(TransactionDetailUiIntent.ErrorShown)
+                        onBack()
+                    },
+                ) {
+                    Text(text = "OK", color = NetScopeAccent)
+                }
+            },
+        )
+    }
+
+    detail?.let { state ->
+        val tx = state.transaction
         Scaffold(
             snackbarHost = {
                 SnackbarHost(hostState = snackbarHostState) { data ->
@@ -178,7 +199,7 @@ fun TransactionDetailScreen(
 
                         // Overflow: full summary copy/share + share as cURL
                         Box {
-                            IconButton(onClick = { overflowExpanded = true }) {
+                            IconButton(onClick = { onIntent(TransactionDetailUiIntent.MenuClicked) }) {
                                 Icon(
                                     imageVector = Icons.Default.MoreVert,
                                     contentDescription = "More options",
@@ -186,8 +207,8 @@ fun TransactionDetailScreen(
                                 )
                             }
                             DropdownMenu(
-                                expanded = overflowExpanded,
-                                onDismissRequest = { overflowExpanded = false },
+                                expanded = state.isMenuOpen,
+                                onDismissRequest = { onIntent(TransactionDetailUiIntent.MenuDismissed) },
                                 containerColor = NetScopeDropdown,
                             ) {
                                 DropdownMenuItem(
@@ -196,7 +217,7 @@ fun TransactionDetailScreen(
                                         Icon(Icons.Default.ContentCopy, contentDescription = null, tint = NetScopeMuted, modifier = Modifier.size(16.dp))
                                     },
                                     onClick = {
-                                        overflowExpanded = false
+                                        onIntent(TransactionDetailUiIntent.MenuDismissed)
                                         NetScopeExporter.copyToClipboard(
                                             context = context,
                                             text = NetScopeExporter.toFullSummary(tx),
@@ -211,7 +232,7 @@ fun TransactionDetailScreen(
                                         Icon(Icons.Default.Share, contentDescription = null, tint = NetScopeMuted, modifier = Modifier.size(16.dp))
                                     },
                                     onClick = {
-                                        overflowExpanded = false
+                                        onIntent(TransactionDetailUiIntent.MenuDismissed)
                                         NetScopeExporter.share(
                                             context = context,
                                             text = NetScopeExporter.toCurl(tx),
@@ -225,7 +246,7 @@ fun TransactionDetailScreen(
                                         Icon(Icons.Default.Share, contentDescription = null, tint = NetScopeMuted, modifier = Modifier.size(16.dp))
                                     },
                                     onClick = {
-                                        overflowExpanded = false
+                                        onIntent(TransactionDetailUiIntent.MenuDismissed)
                                         NetScopeExporter.share(
                                             context = context,
                                             text = NetScopeExporter.toFullSummary(tx),
@@ -239,7 +260,7 @@ fun TransactionDetailScreen(
                                         Icon(Icons.Default.Share, contentDescription = null, tint = NetScopeMuted, modifier = Modifier.size(16.dp))
                                     },
                                     onClick = {
-                                        overflowExpanded = false
+                                        onIntent(TransactionDetailUiIntent.MenuDismissed)
                                         NetScopeExporter.share(
                                             context = context,
                                             text = NetScopeExporter.toHar(listOf(tx)),
@@ -315,10 +336,7 @@ fun TransactionDetailScreen(
                     tabs.forEachIndexed { index, title ->
                         Tab(
                             selected = selectedTab == index,
-                            onClick = {
-                                previousTab = selectedTab
-                                selectedTab = index
-                            },
+                            onClick = { onIntent(TransactionDetailUiIntent.TabClicked(tab = index)) },
                             text = {
                                 Text(
                                     text = title,

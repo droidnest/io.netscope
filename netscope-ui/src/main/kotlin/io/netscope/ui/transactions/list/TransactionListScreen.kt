@@ -1,4 +1,4 @@
-package io.netscope.ui.screen
+package io.netscope.ui.transactions.list
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
@@ -60,10 +60,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -76,11 +74,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import io.netscope.domain.usecase.SortOrder
+import io.netscope.model.SortOrder
 import io.netscope.model.NetTransaction
+import io.netscope.model.TransactionStats
 import io.netscope.ui.component.ColorAmber
-import io.netscope.ui.component.ColorError
-import io.netscope.ui.component.ColorPending
 import io.netscope.ui.component.ColorPurple
 import io.netscope.ui.component.ColorSuccess
 import io.netscope.ui.component.NetScopeAccent
@@ -94,9 +91,12 @@ import io.netscope.ui.component.NetScopeSurface
 import io.netscope.ui.component.TransactionItem
 import io.netscope.ui.component.formatBytes
 import io.netscope.ui.component.color
-import io.netscope.ui.component.methodColor
-import io.netscope.ui.viewmodel.FilterState
-import io.netscope.ui.viewmodel.NetScopeViewModel
+import io.netscope.ui.mvi.UiIntent
+import io.netscope.ui.mvi.UiState
+import io.netscope.ui.transactions.TransactionsMenu
+import io.netscope.ui.transactions.TransactionsUiIntent
+import io.netscope.ui.transactions.TransactionsUiState
+import io.netscope.ui.transactions.model.TransactionFilterUi
 
 private val STATUS_FILTER_CHIPS = listOf(
     "2xx" to setOf(NetTransaction.StatusClass.SUCCESS),
@@ -110,16 +110,24 @@ private val METHOD_CHIPS = listOf("GET", "POST", "PUT", "PATCH", "DELETE")
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TransactionListScreen(
-    viewModel: NetScopeViewModel,
-    onTransactionClick: (Long) -> Unit,
+internal fun TransactionListScreen(
+    uiState: UiState<TransactionsUiState>,
+    onIntent: (UiIntent) -> Unit,
+    onOpenTransaction: (Long) -> Unit,
 ) {
-    val transactions by viewModel.transactions.collectAsState()
-    val searchQuery by viewModel.searchQuery.collectAsState()
-    val filterState by viewModel.filterState.collectAsState()
+    val state = uiState.dataOrNull() ?: return
+    val content = state.content
+    val transactions = content.transactions
+    val searchQuery = content.query
+    val filterState = content.filter
     val context = LocalContext.current
-    var sortMenuExpanded by remember { mutableStateOf(false) }
-    var exportMenuExpanded by remember { mutableStateOf(false) }
+
+    if (state is TransactionsUiState.Navigating) {
+        LaunchedEffect(key1 = state.openedTransactionId) {
+            onOpenTransaction(state.openedTransactionId)
+            onIntent(TransactionsUiIntent.NavigationHandled)
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -162,11 +170,11 @@ fun TransactionListScreen(
                 actions = {
                     // Clear filters — only when active
                     AnimatedVisibility(
-                        visible = filterState.isActive || searchQuery.isNotBlank(),
+                        visible = content.isFiltering,
                         enter = scaleIn(tween(150)) + fadeIn(tween(150)),
                         exit = fadeOut(tween(100)),
                     ) {
-                        IconButton(onClick = { viewModel.clearFilters() }) {
+                        IconButton(onClick = { onIntent(TransactionsUiIntent.ClearFiltersClicked) }) {
                             Icon(
                                 imageVector = Icons.Default.FilterListOff,
                                 contentDescription = "Clear filters",
@@ -176,7 +184,7 @@ fun TransactionListScreen(
                     }
                     // Sort
                     Box {
-                        IconButton(onClick = { sortMenuExpanded = true }) {
+                        IconButton(onClick = { onIntent(TransactionsUiIntent.MenuClicked(menu = TransactionsMenu.SORT)) }) {
                             Icon(
                                 imageVector = Icons.Default.Sort,
                                 contentDescription = "Sort",
@@ -185,8 +193,8 @@ fun TransactionListScreen(
                             )
                         }
                         DropdownMenu(
-                            expanded = sortMenuExpanded,
-                            onDismissRequest = { sortMenuExpanded = false },
+                            expanded = content.openMenu == TransactionsMenu.SORT,
+                            onDismissRequest = { onIntent(TransactionsUiIntent.MenuDismissed) },
                             containerColor = NetScopeDropdown,
                         ) {
                             SortOrder.entries.forEach { order ->
@@ -209,17 +217,14 @@ fun TransactionListScreen(
                                             )
                                         }
                                     },
-                                    onClick = {
-                                        viewModel.setSortOrder(order)
-                                        sortMenuExpanded = false
-                                    },
+                                    onClick = { onIntent(TransactionsUiIntent.SortOrderSelected(sortOrder = order)) },
                                 )
                             }
                         }
                     }
                     // Export
                     Box {
-                        IconButton(onClick = { exportMenuExpanded = true }) {
+                        IconButton(onClick = { onIntent(TransactionsUiIntent.MenuClicked(menu = TransactionsMenu.EXPORT)) }) {
                             Icon(
                                 imageVector = Icons.Default.MoreVert,
                                 contentDescription = "More options",
@@ -227,8 +232,8 @@ fun TransactionListScreen(
                             )
                         }
                         DropdownMenu(
-                            expanded = exportMenuExpanded,
-                            onDismissRequest = { exportMenuExpanded = false },
+                            expanded = content.openMenu == TransactionsMenu.EXPORT,
+                            onDismissRequest = { onIntent(TransactionsUiIntent.MenuDismissed) },
                             containerColor = NetScopeDropdown,
                         ) {
                             DropdownMenuItem(
@@ -238,7 +243,7 @@ fun TransactionListScreen(
                                 },
                                 enabled = transactions.isNotEmpty(),
                                 onClick = {
-                                    exportMenuExpanded = false
+                                    onIntent(TransactionsUiIntent.MenuDismissed)
                                     NetScopeExporter.share(
                                         context = context,
                                         text = NetScopeExporter.toHar(transactions),
@@ -249,7 +254,7 @@ fun TransactionListScreen(
                         }
                     }
                     // Clear all
-                    IconButton(onClick = { viewModel.clearAllTransactions() }) {
+                    IconButton(onClick = { onIntent(TransactionsUiIntent.ClearAllClicked) }) {
                         Icon(
                             imageVector = Icons.Default.DeleteSweep,
                             contentDescription = "Clear all",
@@ -270,20 +275,20 @@ fun TransactionListScreen(
             // Search bar
             SearchBar(
                 query = searchQuery,
-                onQueryChange = viewModel::onSearchQueryChange,
+                onQueryChange = { onIntent(TransactionsUiIntent.QueryTyped(query = it)) },
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
             )
 
             // Filter chips — single scrollable row
             FilterBar(
                 filterState = filterState,
-                onMethodToggle = viewModel::toggleMethodFilter,
-                onStatusToggle = viewModel::toggleStatusClassFilter,
+                onMethodToggle = { onIntent(TransactionsUiIntent.MethodToggled(method = it)) },
+                onStatusToggle = { onIntent(TransactionsUiIntent.StatusClassToggled(statusClass = it)) },
             )
 
             // Stats summary — count · errors · avg time
             if (transactions.isNotEmpty()) {
-                StatsBar(transactions)
+                StatsBar(stats = content.stats)
             }
 
             HorizontalDivider(
@@ -294,7 +299,7 @@ fun TransactionListScreen(
 
             // List / empty state
             if (transactions.isEmpty()) {
-                EmptyState(isSearching = searchQuery.isNotBlank() || filterState.isActive)
+                EmptyState(isSearching = content.isFiltering)
             } else {
                 LazyColumn(
                     contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 24.dp),
@@ -303,7 +308,7 @@ fun TransactionListScreen(
                     items(transactions, key = { it.id }) { transaction ->
                         TransactionItem(
                             transaction = transaction,
-                            onClick = { onTransactionClick(transaction.id) },
+                            onClick = { onIntent(TransactionsUiIntent.TransactionClicked(id = transaction.id)) },
                             modifier = Modifier.animateItem(),
                         )
                     }
@@ -316,31 +321,17 @@ fun TransactionListScreen(
 // ── Stats bar ─────────────────────────────────────────────────────────────────
 
 @Composable
-private fun StatsBar(transactions: List<NetTransaction>) {
-    val (errorCount, avgMs, totalBytes) = remember(transactions) {
-        val errors = transactions.count {
-            it.statusClass in setOf(
-                NetTransaction.StatusClass.CLIENT_ERROR,
-                NetTransaction.StatusClass.SERVER_ERROR,
-                NetTransaction.StatusClass.ERROR,
-            )
-        }
-        val durations = transactions.mapNotNull { it.durationMs }
-        val avg = if (durations.isEmpty()) null else durations.average().toLong()
-        val bytes = transactions.sumOf { it.totalSize }
-        Triple(errors, avg, bytes)
-    }
-
+private fun StatsBar(stats: TransactionStats) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        StatCard(value = "${transactions.size}", label = "REQUESTS", valueColor = NetScopeAccent)
-        StatCard(value = "$errorCount", label = "ERRORS", valueColor = if (errorCount > 0) ColorAmber else NetScopeMuted)
-        StatCard(value = avgMs?.let { "${it}ms" } ?: "—", label = "AVG TIME", valueColor = if (avgMs != null) ColorSuccess else NetScopeMuted)
-        StatCard(value = totalBytes.formatBytes(), label = "TOTAL", valueColor = ColorPurple)
+        StatCard(value = "${stats.totalCount}", label = "REQUESTS", valueColor = NetScopeAccent)
+        StatCard(value = "${stats.errorCount}", label = "ERRORS", valueColor = if (stats.errorCount > 0) ColorAmber else NetScopeMuted)
+        StatCard(value = stats.avgDurationMs?.let { "${it}ms" } ?: "—", label = "AVG TIME", valueColor = if (stats.avgDurationMs != null) ColorSuccess else NetScopeMuted)
+        StatCard(value = stats.totalBytes.formatBytes(), label = "TOTAL", valueColor = ColorPurple)
     }
 }
 
@@ -376,7 +367,7 @@ private fun RowScope.StatCard(value: String, label: String, valueColor: Color) {
 
 @Composable
 private fun FilterBar(
-    filterState: FilterState,
+    filterState: TransactionFilterUi,
     onMethodToggle: (String) -> Unit,
     onStatusToggle: (NetTransaction.StatusClass) -> Unit,
 ) {

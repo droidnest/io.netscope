@@ -1,4 +1,4 @@
-package io.netscope.ui.screen
+package io.netscope.ui.transactions.stats
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -29,7 +29,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -45,12 +45,12 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.netscope.model.NetTransaction
+import io.netscope.model.TransactionStats
 import io.netscope.ui.component.ColorAmber
 import io.netscope.ui.component.ColorError
 import io.netscope.ui.component.ColorPink
 import io.netscope.ui.component.ColorPurple
 import io.netscope.ui.component.ColorSuccess
-import io.netscope.ui.component.MethodChip
 import io.netscope.ui.component.NetScopeAccent
 import io.netscope.ui.component.NetScopeBorder
 import io.netscope.ui.component.NetScopeCard
@@ -63,118 +63,41 @@ import io.netscope.ui.component.NetScopeText2
 import io.netscope.ui.component.color
 import io.netscope.ui.component.formatBytes
 import io.netscope.ui.component.methodColor
-import io.netscope.ui.viewmodel.NetScopeViewModel
+import io.netscope.ui.mvi.UiIntent
+import io.netscope.ui.mvi.UiState
+import io.netscope.ui.transactions.TransactionsUiIntent
+import io.netscope.ui.transactions.TransactionsUiState
 import kotlin.math.roundToInt
 
-// ── Data model ────────────────────────────────────────────────────────────────
+// ── UI model ──────────────────────────────────────────────────────────────────
 
-private data class StatsData(
-    val totalCount: Int,
-    val successRate: Float,              // 0..1
-    val errorCount: Int,                 // 4xx + 5xx + ERROR
-    val avgDurationMs: Long?,
-    val totalBytes: Long,
-    val methodCounts: List<Pair<String, Int>>,
-    val statusClassCounts: List<Pair<NetTransaction.StatusClass, Int>>,
-    val durationBuckets: List<DurationBucket>,
-    val slowestRequests: List<NetTransaction>,
-    val topHosts: List<Pair<String, Int>>,
-    val p50Ms: Long?,
-    val p95Ms: Long?,
-) {
-    companion object {
-        fun compute(txList: List<NetTransaction>): StatsData {
-            if (txList.isEmpty()) return empty()
+private data class DurationBucketUi(val label: String, val count: Int, val color: Color)
 
-            val total = txList.size
-            val successCount = txList.count { it.statusClass == NetTransaction.StatusClass.SUCCESS }
-            val errorCount = txList.count {
-                it.statusClass in setOf(
-                    NetTransaction.StatusClass.CLIENT_ERROR,
-                    NetTransaction.StatusClass.SERVER_ERROR,
-                    NetTransaction.StatusClass.ERROR,
-                )
-            }
-
-            val durations = txList.mapNotNull { it.durationMs }.sorted()
-            val avgMs     = if (durations.isEmpty()) null else durations.average().toLong()
-            val p50       = if (durations.isEmpty()) null else durations[durations.size * 50 / 100]
-            val p95       = if (durations.isEmpty()) null else durations[(durations.size * 95 / 100).coerceAtMost(durations.size - 1)]
-
-            // Method counts (sorted descending)
-            val methodCounts = txList.groupingBy { it.method }
-                .eachCount()
-                .entries
-                .sortedByDescending { it.value }
-                .map { it.key to it.value }
-
-            // Status class counts (sorted descending)
-            val statusCounts = txList.groupingBy { it.statusClass }
-                .eachCount()
-                .entries
-                .filter { it.value > 0 }
-                .sortedByDescending { it.value }
-                .map { it.key to it.value }
-
-            // Duration buckets
-            val b0   = txList.count { (it.durationMs ?: 0L) < 100L }
-            val b100 = txList.count { (it.durationMs ?: 0L) in 100L..299L }
-            val b300 = txList.count { (it.durationMs ?: 0L) in 300L..999L }
-            val b1s  = txList.count { (it.durationMs ?: 0L) >= 1000L }
-            val buckets = listOf(
-                DurationBucket("< 100ms",  b0,   ColorSuccess),
-                DurationBucket("100–300ms", b100, NetTransaction.StatusClass.SUCCESS.let { ColorSuccess.copy(alpha = 0.7f) }),
-                DurationBucket("300ms–1s", b300, ColorAmber),
-                DurationBucket("> 1s",     b1s,  ColorError),
-            ).filter { it.count > 0 }
-
-            // Slowest 5 completed
-            val slowest = txList
-                .filter { it.durationMs != null }
-                .sortedByDescending { it.durationMs }
-                .take(5)
-
-            // Top 5 hosts
-            val topHosts = txList.groupingBy { it.host }
-                .eachCount()
-                .entries
-                .sortedByDescending { it.value }
-                .take(5)
-                .map { it.key to it.value }
-
-            return StatsData(
-                totalCount       = total,
-                successRate      = if (total > 0) successCount.toFloat() / total else 0f,
-                errorCount       = errorCount,
-                avgDurationMs    = avgMs,
-                totalBytes       = txList.sumOf { it.totalSize },
-                methodCounts     = methodCounts,
-                statusClassCounts = statusCounts,
-                durationBuckets  = buckets,
-                slowestRequests  = slowest,
-                topHosts         = topHosts,
-                p50Ms            = p50,
-                p95Ms            = p95,
-            )
-        }
-
-        private fun empty() = StatsData(0, 0f, 0, null, 0L, emptyList(),
-            emptyList(), emptyList(), emptyList(), emptyList(), null, null)
-    }
+private fun TransactionStats.DurationBucket.toUi(count: Int) = when (this) {
+    TransactionStats.DurationBucket.FAST      -> DurationBucketUi(label = "< 100ms", count = count, color = ColorSuccess)
+    TransactionStats.DurationBucket.MEDIUM    -> DurationBucketUi(label = "100–300ms", count = count, color = ColorSuccess.copy(alpha = 0.7f))
+    TransactionStats.DurationBucket.SLOW      -> DurationBucketUi(label = "300ms–1s", count = count, color = ColorAmber)
+    TransactionStats.DurationBucket.VERY_SLOW -> DurationBucketUi(label = "> 1s", count = count, color = ColorError)
 }
-
-private data class DurationBucket(val label: String, val count: Int, val color: Color)
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun StatsScreen(
-    viewModel: NetScopeViewModel,
-    onTransactionClick: (Long) -> Unit,
+internal fun StatsScreen(
+    uiState: UiState<TransactionsUiState>,
+    onIntent: (UiIntent) -> Unit,
+    onOpenTransaction: (Long) -> Unit,
 ) {
-    val transactions by viewModel.transactions.collectAsState()
-    val stats = remember(transactions) { StatsData.compute(transactions) }
+    val state = uiState.dataOrNull() ?: return
+    val stats = state.content.stats
+
+    if (state is TransactionsUiState.Navigating) {
+        LaunchedEffect(key1 = state.openedTransactionId) {
+            onOpenTransaction(state.openedTransactionId)
+            onIntent(TransactionsUiIntent.NavigationHandled)
+        }
+    }
 
     // Capture composable color tokens before lambdas / remember blocks
     val accent    = NetScopeAccent
@@ -200,7 +123,7 @@ fun StatsScreen(
         },
         containerColor = NetScopeDarkBackground,
     ) { innerPadding ->
-        if (transactions.isEmpty()) {
+        if (stats.totalCount == 0) {
             StatsEmptyState(modifier = Modifier.padding(innerPadding))
         } else {
             Column(
@@ -275,9 +198,9 @@ fun StatsScreen(
                 // ── Response time distribution ────────────────────────────────
                 if (stats.durationBuckets.isNotEmpty()) {
                     StatsCard(title = "Response time") {
-                        val maxBucket = stats.durationBuckets.maxOfOrNull { it.count } ?: 1
-                        stats.durationBuckets.forEach { bucket ->
-                            BucketRow(bucket, maxBucket, stats.totalCount)
+                        val maxBucket = stats.durationBuckets.maxOfOrNull { it.second } ?: 1
+                        stats.durationBuckets.forEach { (bucket, count) ->
+                            BucketRow(bucket = bucket.toUi(count = count), maxCount = maxBucket, total = stats.totalCount)
                         }
                     }
                 }
@@ -289,7 +212,7 @@ fun StatsScreen(
                             SlowestRow(
                                 rank    = idx + 1,
                                 tx      = tx,
-                                onClick = { onTransactionClick(tx.id) },
+                                onClick = { onIntent(TransactionsUiIntent.TransactionClicked(id = tx.id)) },
                             )
                             if (idx < stats.slowestRequests.lastIndex) {
                                 HorizontalDivider(
@@ -326,7 +249,7 @@ fun StatsScreen(
 // ── Summary Row ───────────────────────────────────────────────────────────────
 
 @Composable
-private fun SummaryRow(stats: StatsData) {
+private fun SummaryRow(stats: TransactionStats) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -455,7 +378,7 @@ private fun PercentileRow(label: String, value: String, valueColor: Color) {
 // ── Status distribution ───────────────────────────────────────────────────────
 
 @Composable
-private fun StatusDistributionBar(stats: StatsData) {
+private fun StatusDistributionBar(stats: TransactionStats) {
     if (stats.statusClassCounts.isEmpty()) return
     val total = stats.statusClassCounts.sumOf { it.second }.coerceAtLeast(1)
 
@@ -611,7 +534,7 @@ private fun MethodRow(method: String, count: Int, maxCount: Int, total: Int) {
 // ── Duration bucket row ───────────────────────────────────────────────────────
 
 @Composable
-private fun BucketRow(bucket: DurationBucket, maxCount: Int, total: Int) {
+private fun BucketRow(bucket: DurationBucketUi, maxCount: Int, total: Int) {
     val pct = if (total > 0) (bucket.count * 100f / total).roundToInt() else 0
     Row(
         modifier = Modifier

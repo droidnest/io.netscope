@@ -1,4 +1,4 @@
-package io.netscope.ui.screen
+package io.netscope.ui.settings
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
@@ -47,10 +47,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -59,7 +58,6 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -77,9 +75,10 @@ import io.netscope.ui.component.NetScopeDarkBackground
 import io.netscope.ui.component.NetScopeMuted
 import io.netscope.ui.component.NetScopeOnSurface
 import io.netscope.ui.component.NetScopeSurface
-import io.netscope.NetScope
 import io.netscope.NotificationStyle
-import io.netscope.ui.preferences.NetScopePreferences
+import io.netscope.model.SettingChange
+import io.netscope.ui.mvi.UiIntent
+import io.netscope.ui.mvi.UiState
 import io.netscope.ui.preferences.ThemeMode
 
 // ── Picker options ────────────────────────────────────────────────────────────
@@ -105,29 +104,25 @@ private val BODY_SIZE_OPTIONS = listOf(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(
+internal fun SettingsScreen(
+    uiState: UiState<SettingsUiState>,
+    onIntent: (UiIntent) -> Unit,
     onBack: () -> Unit,
-    onClearAll: () -> Unit,
     currentTheme: ThemeMode,
     onThemeChange: (ThemeMode) -> Unit,
 ) {
-    val context = LocalContext.current
-    val prefs   = remember { NetScopePreferences(context) }
+    val state = uiState.dataOrNull() ?: return
+    val content = state.content
+    val settings = content.settings
+    val focusRequester = remember { FocusRequester() }
+    val focusManager   = LocalFocusManager.current
 
-    // Show what the library runs with: the app's configuration plus what was saved here
-    val config = NetScope.config
-    var maxTransactions    by rememberSaveable { mutableStateOf(config.maxTransactions) }
-    var maxBodySize        by rememberSaveable { mutableStateOf(config.maxBodySize) }
-    var alwaysReadBody     by rememberSaveable { mutableStateOf(config.alwaysReadResponseBody) }
-    var redactedHeaders    by rememberSaveable { mutableStateOf(config.redactedHeaders) }
-    var shakeToOpen        by rememberSaveable { mutableStateOf(NetScope.shakeEnabled) }
-    var notifStyle         by rememberSaveable { mutableStateOf(NetScope.notificationStyle) }
-
-    var showClearDialog    by remember { mutableStateOf(false) }
-    var showAddHeaderField by remember { mutableStateOf(false) }
-    var addHeaderInput     by remember { mutableStateOf("") }
-    val focusRequester     = remember { FocusRequester() }
-    val focusManager       = LocalFocusManager.current
+    if (state is SettingsUiState.Navigating) {
+        LaunchedEffect(key1 = state) {
+            onBack()
+            onIntent(SettingsUiIntent.NavigationHandled)
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -171,10 +166,7 @@ fun SettingsScreen(
                 ) {
                     ThemeModePicker(
                         selected = currentTheme,
-                        onSelect = { mode ->
-                            prefs.themeMode = mode
-                            onThemeChange(mode)
-                        },
+                        onSelect = onThemeChange,
                     )
                 }
             }
@@ -188,12 +180,8 @@ fun SettingsScreen(
                 ) {
                     OptionChips(
                         options  = MAX_TX_OPTIONS,
-                        selected = maxTransactions,
-                        onSelect = { v ->
-                            maxTransactions = v
-                            prefs.maxTransactions = v
-                            NetScope.updateConfig { copy(maxTransactions = v) }
-                        },
+                        selected = settings.maxTransactions,
+                        onSelect = { onIntent(SettingsUiIntent.SettingChanged(change = SettingChange.MaxTransactions(count = it))) },
                     )
                 }
 
@@ -205,12 +193,8 @@ fun SettingsScreen(
                 ) {
                     OptionChips(
                         options  = BODY_SIZE_OPTIONS,
-                        selected = maxBodySize,
-                        onSelect = { v ->
-                            maxBodySize = v
-                            prefs.maxBodySizeBytes = v
-                            NetScope.updateConfig { copy(maxBodySize = v) }
-                        },
+                        selected = settings.maxBodySize,
+                        onSelect = { onIntent(SettingsUiIntent.SettingChanged(change = SettingChange.MaxBodySize(bytes = it))) },
                     )
                 }
 
@@ -221,12 +205,8 @@ fun SettingsScreen(
                     subtitle = "Force-read bodies even for non-text content types.",
                     trailing = {
                         NetScopeSwitch(
-                            checked         = alwaysReadBody,
-                            onCheckedChange = { v ->
-                                alwaysReadBody = v
-                                prefs.alwaysReadResponseBody = v
-                                NetScope.updateConfig { copy(alwaysReadResponseBody = v) }
-                            },
+                            checked         = settings.alwaysReadResponseBody,
+                            onCheckedChange = { onIntent(SettingsUiIntent.SettingChanged(change = SettingChange.AlwaysReadResponseBody(isEnabled = it))) },
                         )
                     },
                 )
@@ -239,34 +219,20 @@ fun SettingsScreen(
                     subtitle = "Matched header values are replaced with ██████ in the UI and all exports.",
                 ) {
                     RedactedHeadersEditor(
-                        headers        = redactedHeaders,
-                        showAddField   = showAddHeaderField,
-                        addInput       = addHeaderInput,
+                        headers        = settings.redactedHeaders,
+                        showAddField   = content.isAddHeaderOpen,
+                        addInput       = content.addHeaderInput,
                         focusRequester = focusRequester,
-                        onAddInputChange = { addHeaderInput = it },
+                        onAddInputChange = { onIntent(SettingsUiIntent.HeaderTyped(input = it)) },
                         onAddToggle    = {
-                            showAddHeaderField = !showAddHeaderField
-                            addHeaderInput = ""
-                            if (!showAddHeaderField) focusManager.clearFocus()
+                            if (content.isAddHeaderOpen) focusManager.clearFocus()
+                            onIntent(SettingsUiIntent.AddHeaderClicked)
                         },
                         onConfirmAdd   = {
-                            val trimmed = addHeaderInput.trim()
-                            if (trimmed.isNotEmpty()) {
-                                val updated = redactedHeaders + trimmed.lowercase()
-                                redactedHeaders = updated
-                                prefs.redactedHeaders = updated
-                                NetScope.updateConfig { copy(redactedHeaders = updated.map { it.lowercase() }.toSet()) }
-                            }
-                            addHeaderInput = ""
-                            showAddHeaderField = false
+                            onIntent(SettingsUiIntent.AddHeaderConfirmed)
                             focusManager.clearFocus()
                         },
-                        onRemove       = { header ->
-                            val updated = redactedHeaders - header
-                            redactedHeaders = updated
-                            prefs.redactedHeaders = updated
-                            NetScope.updateConfig { copy(redactedHeaders = updated.map { it.lowercase() }.toSet()) }
-                        },
+                        onRemove       = { onIntent(SettingsUiIntent.HeaderRemoved(header = it)) },
                     )
                 }
             }
@@ -279,12 +245,8 @@ fun SettingsScreen(
                     subtitle = "Shake the device to launch the NetScope transaction list.",
                     trailing = {
                         NetScopeSwitch(
-                            checked         = shakeToOpen,
-                            onCheckedChange = { v ->
-                                shakeToOpen = v
-                                prefs.shakeToOpen = v
-                                NetScope.setShakeEnabled(v)
-                            },
+                            checked         = settings.shakeToOpen,
+                            onCheckedChange = { onIntent(SettingsUiIntent.SettingChanged(change = SettingChange.ShakeToOpen(isEnabled = it))) },
                         )
                     },
                 )
@@ -296,12 +258,8 @@ fun SettingsScreen(
                     subtitle = "Controls how much information appears in the status-bar notification.",
                 ) {
                     NotificationStylePicker(
-                        selected = notifStyle,
-                        onSelect = { v ->
-                            notifStyle = v
-                            prefs.notificationStyle = v
-                            NetScope.notificationStyle = v
-                        },
+                        selected = settings.notificationStyle,
+                        onSelect = { onIntent(SettingsUiIntent.SettingChanged(change = SettingChange.Notifications(style = it))) },
                     )
                 }
             }
@@ -350,7 +308,7 @@ fun SettingsScreen(
                     .clip(RoundedCornerShape(10.dp))
                     .background(ColorError.copy(alpha = 0.08f))
                     .border(0.5.dp, ColorError.copy(alpha = 0.25f), RoundedCornerShape(10.dp))
-                    .clickable { showClearDialog = true }
+                    .clickable { onIntent(SettingsUiIntent.ClearAllClicked) }
                     .padding(horizontal = 16.dp, vertical = 14.dp),
             ) {
                 Row(
@@ -366,9 +324,9 @@ fun SettingsScreen(
         }
     }
 
-    if (showClearDialog) {
+    if (content.isClearDialogOpen) {
         AlertDialog(
-            onDismissRequest = { showClearDialog = false },
+            onDismissRequest = { onIntent(SettingsUiIntent.ClearAllCancelled) },
             containerColor   = NetScopeCard,
             title  = { Text("Clear all transactions?", color = NetScopeOnSurface, fontWeight = FontWeight.SemiBold) },
             text   = {
@@ -379,12 +337,12 @@ fun SettingsScreen(
                 )
             },
             confirmButton = {
-                TextButton(onClick = { showClearDialog = false; onClearAll(); onBack() }) {
+                TextButton(onClick = { onIntent(SettingsUiIntent.ClearAllConfirmed) }) {
                     Text("Clear all", color = ColorError, fontWeight = FontWeight.SemiBold)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showClearDialog = false }) {
+                TextButton(onClick = { onIntent(SettingsUiIntent.ClearAllCancelled) }) {
                     Text("Cancel", color = NetScopeMuted)
                 }
             },
