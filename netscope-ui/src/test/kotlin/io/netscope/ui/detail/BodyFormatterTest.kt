@@ -87,4 +87,28 @@ class BodyFormatterTest {
         assertEquals(2, colours.size)
         assertTrue(colours[0].item.color != colours[1].item.color)
     }
+
+    @Test(timeout = 5_000)
+    fun `should keep the text of a tag with a slash that closes nothing when highlighting xml`() {
+        listOf("<a href=/x>", "<a /b>", "<a /", "<a b=/").forEach { line ->
+            // When
+            val result = line.highlighted(kind = BodyKind.XML)
+
+            // Then
+            assertEquals(line, result.text)
+        }
+    }
+
+    @Test(timeout = 10_000)
+    fun `should show the raw text when a body only opens brackets`() {
+        // Given
+        val body = "[".repeat(800_000)
+
+        // When
+        val result = formatBody(body = body)
+
+        // Then
+        assertEquals(body, result.lines.joinToString(separator = ""))
+        assertEquals(800, result.lines.size)
+    }
 }

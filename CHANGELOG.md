@@ -52,6 +52,8 @@ Planned work is in the [README roadmap](README.md#roadmap).
 - A second tap on Save in the mock rule editor no longer adds a duplicate rule
 - Opening a large response no longer freezes the app: it was formatted on the main thread, which caused an
   ANR with a 240 KB JSON body. Formatting also no longer crashes on a body cut in the middle of an escape
+- A response can no longer hang or crash the app through the body viewer: a stray `/` in an XML tag looped
+  forever, and deeply nested JSON ran out of memory
 - Exporting the list as HAR no longer blocks the main thread
 - The request list no longer flashes "No requests yet" while it loads
 - Primary tabs no longer leave a blank band above the bottom bar

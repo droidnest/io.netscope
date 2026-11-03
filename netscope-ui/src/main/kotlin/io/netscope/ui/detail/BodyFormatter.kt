@@ -15,6 +15,9 @@ internal data class FormattedBody(val kind: BodyKind, val lines: List<String>)
 /** Most characters on a line: a body with no line breaks would be one huge text otherwise. */
 internal const val MAX_LINE_CHARS = 1_000
 
+/** Most characters of a pretty-printed body, about four times what a large real one needs. */
+private const val MAX_PRETTY_CHARS = 8_000_000
+
 /** Pretty-prints [body] and cuts it into lines. A large body takes long: call it off the main thread. */
 internal fun formatBody(body: String): FormattedBody {
     val trimmed = body.trim()
@@ -142,6 +145,10 @@ private fun AnnotatedString.Builder.appendXmlHighlighted(xml: String) {
                                 if (i < xml.length) i++
                                 withStyle(SpanStyle(color = JsonNumberColor)) { append(xml.substring(q, i)) }
                             }
+                        } else if (i == attrStart) {
+                            // A slash that closes nothing, as in href=/path: step over it
+                            withStyle(SpanStyle(color = JsonPunctColor)) { append(xml[i]) }
+                            i++
                         }
                     }
                 }
@@ -157,26 +164,35 @@ private fun AnnotatedString.Builder.appendXmlHighlighted(xml: String) {
     }
 }
 
-private fun String.prettyPrintJson(): String = try {
-    val sb = StringBuilder()
-    var indent = 0
-    var inString = false
-    var i = 0
-    while (i < length) {
-        val ch = this[i]
-        when {
-            ch == '"' && !inString -> { inString = true;  sb.append(ch) }
-            ch == '"' && inString  -> { inString = false; sb.append(ch) }
-            ch == '\\' && inString -> { sb.append(ch); sb.append(this[++i]) }
-            inString               -> sb.append(ch)
-            ch == '{' || ch == '[' -> { sb.append(ch); sb.append('\n'); indent++; sb.append("  ".repeat(indent)) }
-            ch == '}' || ch == ']' -> { sb.append('\n'); indent--; sb.append("  ".repeat(indent)); sb.append(ch) }
-            ch == ','              -> { sb.append(ch); sb.append('\n'); sb.append("  ".repeat(indent)) }
-            ch == ':'              -> sb.append(": ")
-            ch in " \n\r\t"       -> { /* skip pre-existing whitespace */ }
-            else                   -> sb.append(ch)
+/**
+ * This JSON on one line per value, or this text unchanged when it is malformed or when printing it
+ * would outgrow [MAX_PRETTY_CHARS]: the indent of a body that only opens brackets grows by the line.
+ */
+private fun String.prettyPrintJson(): String {
+    try {
+        val sb = StringBuilder()
+        var indent = 0
+        var inString = false
+        var i = 0
+        while (i < length) {
+            val ch = this[i]
+            when {
+                ch == '"' && !inString -> { inString = true;  sb.append(ch) }
+                ch == '"' && inString  -> { inString = false; sb.append(ch) }
+                ch == '\\' && inString -> { sb.append(ch); sb.append(this[++i]) }
+                inString               -> sb.append(ch)
+                ch == '{' || ch == '[' -> { sb.append(ch); sb.append('\n'); indent++; sb.append("  ".repeat(indent)) }
+                ch == '}' || ch == ']' -> { sb.append('\n'); indent--; sb.append("  ".repeat(indent)); sb.append(ch) }
+                ch == ','              -> { sb.append(ch); sb.append('\n'); sb.append("  ".repeat(indent)) }
+                ch == ':'              -> sb.append(": ")
+                ch in " \n\r\t"       -> { /* skip pre-existing whitespace */ }
+                else                   -> sb.append(ch)
+            }
+            if (sb.length > MAX_PRETTY_CHARS) return this
+            i++
         }
-        i++
+        return sb.toString()
+    } catch (_: Exception) {
+        return this
     }
-    sb.toString()
-} catch (_: Exception) { this }
+}
