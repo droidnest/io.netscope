@@ -1,10 +1,13 @@
 package io.netscope.ui.detail
 
+import io.netscope.ui.component.DarkNetScopeColors
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class BodyFormatterTest {
+
+    private val syntax = DarkNetScopeColors.syntax
 
     @Test
     fun `should pretty print json on one line per value when formatting`() {
@@ -71,7 +74,7 @@ class BodyFormatterTest {
         val line = """{"a":"value\"""
 
         // When
-        val result = line.highlighted(kind = BodyKind.JSON)
+        val result = line.highlighted(kind = BodyKind.JSON, colors = syntax)
 
         // Then
         assertEquals(line, result.text)
@@ -80,7 +83,7 @@ class BodyFormatterTest {
     @Test
     fun `should colour keys apart from string values when highlighting json`() {
         // When
-        val result = """"key": "value"""".highlighted(kind = BodyKind.JSON)
+        val result = """"key": "value"""".highlighted(kind = BodyKind.JSON, colors = syntax)
 
         // Then
         val colours = result.spanStyles.filter { result.text.substring(it.start, it.end).startsWith('"') }
@@ -92,7 +95,7 @@ class BodyFormatterTest {
     fun `should keep the text of a tag with a slash that closes nothing when highlighting xml`() {
         listOf("<a href=/x>", "<a /b>", "<a /", "<a b=/").forEach { line ->
             // When
-            val result = line.highlighted(kind = BodyKind.XML)
+            val result = line.highlighted(kind = BodyKind.XML, colors = syntax)
 
             // Then
             assertEquals(line, result.text)

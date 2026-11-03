@@ -8,16 +8,20 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.collectLatest
 
 private val ThumbWidth = 3.dp
 private val ThumbMinHeight = 32.dp
 private val ThumbEndGap = 3.dp
+private val EdgeFadeHeight = 14.dp
 private const val FADE_IN_MS = 120
 private const val FADE_OUT_MS = 500
 private const val THUMB_ALPHA = 0.7f
@@ -64,3 +68,22 @@ internal fun Modifier.scrollIndicator(state: LazyListState): Modifier {
         )
     }
 }
+
+/**
+ * Fades the rows into the [background] where they pass under the fixed header, instead of a rule
+ * that stays even with nothing under it. A gradient, not a blur, which would cost a low-end GPU
+ * every frame of a scroll. Grows with the first pixels scrolled, read only when drawing.
+ */
+internal fun Modifier.scrollEdgeFade(state: LazyListState, background: Color): Modifier =
+    drawWithCache {
+        val height = EdgeFadeHeight.toPx()
+        val fade = Brush.verticalGradient(colors = listOf(background, background.copy(alpha = 0f)), endY = height)
+        onDrawWithContent {
+            drawContent()
+            val scrolled = when {
+                state.firstVisibleItemIndex > 0 -> 1f
+                else -> (state.firstVisibleItemScrollOffset / height).coerceAtMost(1f)
+            }
+            if (scrolled > 0f) drawRect(brush = fade, size = Size(size.width, height), alpha = scrolled)
+        }
+    }

@@ -61,7 +61,6 @@ import io.netscope.export.NetScopeExporter
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
@@ -69,14 +68,14 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -107,6 +106,7 @@ import io.netscope.ui.component.NetScopeOnSurface
 import io.netscope.ui.component.NetScopeSurface
 import io.netscope.ui.component.TransactionItem
 import io.netscope.ui.component.formatBytes
+import io.netscope.ui.component.scrollEdgeFade
 import io.netscope.ui.component.scrollIndicator
 import io.netscope.ui.component.color
 import io.netscope.ui.mvi.UiIntent
@@ -133,6 +133,10 @@ private const val JUMP_TO_TOP_FROM_INDEX = 5
 /** A longer jump snaps this close to the top first, so it does not compose every row on the way. */
 private const val JUMP_SNAP_INDEX = 10
 
+private val PILL_SLIDE = spring(
+    stiffness = Spring.StiffnessMedium,
+    visibilityThreshold = IntOffset.VisibilityThreshold,
+)
 private val ROW_FADE_IN = tween<Float>(durationMillis = 150)
 private val ROW_PLACEMENT = spring(
     stiffness = Spring.StiffnessMediumLow,
@@ -333,12 +337,6 @@ internal fun TransactionListScreen(
                 onStatusToggle = { onFilterIntent(TransactionsUiIntent.StatusClassToggled(statusClass = it)) },
             )
 
-            HorizontalDivider(
-                color = NetScopeBorder,
-                thickness = 0.5.dp,
-                modifier = Modifier.padding(top = 2.dp),
-            )
-
             // List / empty state
             when {
                 content.isLoading -> Unit
@@ -377,8 +375,9 @@ private fun TransactionList(
             state = listState,
             modifier = Modifier
                 .fillMaxSize()
+                .scrollEdgeFade(state = listState, background = NetScopeDarkBackground)
                 .scrollIndicator(state = listState),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(5.dp),
         ) {
             item(key = "stats", contentType = "stats") {
@@ -434,8 +433,8 @@ private fun JumpToTop(
 
     AnimatedVisibility(
         visible = newCount > 0 || isFarDown,
-        enter = fadeIn(tween(150)) + slideInVertically(tween(200)) { -it },
-        exit = fadeOut(tween(120)) + slideOutVertically(tween(160)) { -it },
+        enter = fadeIn(tween(150)) + slideInVertically(PILL_SLIDE) { -it },
+        exit = fadeOut(tween(120)) + slideOutVertically(PILL_SLIDE) { -it },
         modifier = modifier,
     ) {
         JumpToTopPill(
@@ -518,7 +517,7 @@ private fun RowScope.StatCard(value: String, label: String, valueColor: Color) {
         Text(
             text = label,
             color = NetScopeMuted,
-            fontSize = 8.sp,
+            fontSize = 10.sp,
             letterSpacing = 1.sp,
         )
     }
@@ -587,7 +586,7 @@ private fun FilterChip(
             .background(bg)
             .border(0.5.dp, border, RoundedCornerShape(20.dp))
             .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 5.dp),
+            .padding(horizontal = 13.dp, vertical = 7.dp),
         contentAlignment = Alignment.Center,
     ) {
         Text(
@@ -613,7 +612,8 @@ private fun SearchBar(
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
             .background(NetScopeCard)
-            .padding(horizontal = 12.dp, vertical = 9.dp),
+            .height(40.dp) // Fixed: the clear button must not resize the bar when it appears
+            .padding(horizontal = 12.dp),
         contentAlignment = Alignment.CenterStart,
     ) {
         BasicTextField(
@@ -657,7 +657,7 @@ private fun SearchBar(
                     ) {
                         IconButton(
                             onClick = { onQueryChange("") },
-                            modifier = Modifier.size(18.dp),
+                            modifier = Modifier.size(28.dp),
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Close,

@@ -45,6 +45,15 @@ private val ChipShape = RoundedCornerShape(6.dp)
 private val RowShape = RoundedCornerShape(10.dp)
 private val StripeWidth = 3.dp
 
+/** The title of a tab, the same on all of them. */
+@Composable
+internal fun ScreenTitle(text: String, subtitle: String? = null) {
+    Column {
+        Text(text = text, color = NetScopeOnSurface, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+        if (subtitle != null) Text(text = subtitle, color = NetScopeText2, fontSize = 11.sp)
+    }
+}
+
 // Rows are composed on the main thread only, and building a format for each costs more than the row
 private val RowTimeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
 
@@ -62,7 +71,7 @@ fun MethodChip(method: String, modifier: Modifier = Modifier) {
         Text(
             text = method,
             color = color,
-            fontSize = 9.sp,
+            fontSize = 10.sp,
             fontWeight = FontWeight.Bold,
             fontFamily = FontFamily.Monospace,
             letterSpacing = 0.5.sp,
@@ -140,7 +149,7 @@ fun TransactionItem(
                 Text(
                     text = transaction.path + (transaction.query?.let { "?$it" } ?: ""),
                     color = NetScopeOnSurface,
-                    fontSize = 11.sp,
+                    fontSize = 12.sp,
                     fontFamily = FontFamily.Monospace,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -149,7 +158,7 @@ fun TransactionItem(
                 Text(
                     text = timeLabel,
                     color = NetScopeMuted,
-                    fontSize = 9.sp,
+                    fontSize = 10.sp,
                     fontFamily = FontFamily.Monospace,
                 )
             }
@@ -163,7 +172,7 @@ fun TransactionItem(
                 Text(
                     text = transaction.host,
                     color = NetScopeMuted,
-                    fontSize = 9.sp,
+                    fontSize = 10.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
@@ -173,7 +182,7 @@ fun TransactionItem(
                     Text(
                         text = "${transaction.durationMs}ms",
                         color = durationColor(transaction.durationMs ?: 0L),
-                        fontSize = 9.sp,
+                        fontSize = 10.sp,
                         fontFamily = FontFamily.Monospace,
                     )
                 }
@@ -181,7 +190,7 @@ fun TransactionItem(
                     Text(
                         text = sizeLabel,
                         color = NetScopeMuted,
-                        fontSize = 9.sp,
+                        fontSize = 10.sp,
                     )
                 }
             }
@@ -233,8 +242,9 @@ fun Long.formatBytes(): String = when {
 }
 
 /** Colours duration: green ≤300ms, amber ≤1s, red >1s. */
+@Composable
 private fun durationColor(ms: Long): Color = when {
-    ms <= 300  -> ColorSuccess.copy(alpha = 0.85f)
+    ms <= 300  -> ColorSuccess
     ms <= 1000 -> ColorAmber
     else       -> ColorError
 }

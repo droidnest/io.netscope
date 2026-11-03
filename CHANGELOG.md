@@ -33,6 +33,9 @@ Planned work is in the [README roadmap](README.md#roadmap).
 - Request and response bodies wrap instead of scrolling sideways, one lazily drawn line at a time. XML shows
   each tag on its own line
 - `TransactionItem` takes a `TransactionSummary`
+- Each theme has its own status, method and syntax colours, all at WCAG AA contrast, so `ColorSuccess` and the
+  other colour tokens, `StatusClass.color()`, `methodColor()` and `statusColor()` are now `@Composable`
+- Text is at least 10 sp, tab titles share one style, and the Mock and Settings tabs lose their back arrow
 - Database version 4 indexes `requestDate`; the migration keeps the stored traffic
 
 ### Fixed
@@ -57,6 +60,7 @@ Planned work is in the [README roadmap](README.md#roadmap).
 - Exporting the list as HAR no longer blocks the main thread
 - The request list no longer flashes "No requests yet" while it loads
 - Primary tabs no longer leave a blank band above the bottom bar
+- The "copied" snackbar was white on white in the light theme
 - The Stats response-time percentages add up to 100%
 - `toCurl` escapes single quotes in the URL and headers, so an exported command cannot break or run a value
 - A mock rule with an invalid Content-Type is no longer saved, and one already saved no longer crashes the

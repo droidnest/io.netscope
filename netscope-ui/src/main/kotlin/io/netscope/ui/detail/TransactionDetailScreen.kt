@@ -1,6 +1,9 @@
 package io.netscope.ui.detail
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.VisibilityThreshold
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -59,7 +62,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -67,6 +69,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.netscope.export.NetScopeExporter
@@ -81,12 +84,14 @@ import io.netscope.ui.component.NetScopeDropdown
 import io.netscope.ui.component.NetScopeMuted
 import io.netscope.ui.component.NetScopeOnSurface
 import io.netscope.ui.component.ColorAmber
+import io.netscope.ui.component.ColorCyan
 import io.netscope.ui.component.ColorError
 import io.netscope.ui.component.ColorPink
 import io.netscope.ui.component.ColorPurple
 import io.netscope.ui.component.ColorSuccess
 import io.netscope.ui.component.NetScopeCardAlt
 import io.netscope.ui.component.NetScopeSurface
+import io.netscope.ui.component.NetScopeSyntax
 import io.netscope.ui.component.NetScopeText2
 import io.netscope.ui.component.StatusBadge
 import io.netscope.ui.component.color
@@ -100,6 +105,11 @@ import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+
+private val TAB_SLIDE = spring(
+    stiffness = Spring.StiffnessMediumLow,
+    visibilityThreshold = IntOffset.VisibilityThreshold,
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -156,7 +166,7 @@ internal fun TransactionDetailScreen(
                     Snackbar(
                         snackbarData = data,
                         containerColor = NetScopeDropdown,
-                        contentColor = Color.White,
+                        contentColor = NetScopeOnSurface,
                         actionColor = NetScopeAccent,
                         shape = RoundedCornerShape(10.dp),
                     )
@@ -357,8 +367,9 @@ internal fun TransactionDetailScreen(
                     targetState = selectedTab,
                     transitionSpec = {
                         val direction = if (targetState > initialState) 1 else -1
-                        (slideInHorizontally(tween(250)) { w -> direction * w } + fadeIn(tween(200))) togetherWith
-                            (slideOutHorizontally(tween(200)) { w -> -direction * w } + fadeOut(tween(150)))
+                        // A spring carries on from where the tabs are when another one is tapped mid-way
+                        (slideInHorizontally(TAB_SLIDE) { w -> direction * w } + fadeIn(tween(200))) togetherWith
+                            (slideOutHorizontally(TAB_SLIDE) { w -> -direction * w } + fadeOut(tween(150)))
                     },
                     label = "tabContent",
                 ) { tab ->
@@ -527,7 +538,7 @@ private fun MiniStatCard(
         Text(
             text       = label,
             color      = NetScopeMuted,
-            fontSize   = 8.sp,
+            fontSize   = 10.sp,
             fontFamily = FontFamily.SansSerif,
         )
     }
@@ -537,21 +548,19 @@ private fun MiniStatCard(
 
 private data class PhaseSegment(val label: String, val durationMs: Long, val color: Color)
 
-private val PhaseDns      = ColorPurple
-private val PhaseConnect  = Color(0xFF00C8F0)  // Cyan
-private val PhaseSsl      = ColorPink
-private val PhaseTtfb     = ColorAmber
-private val PhaseDownload = ColorSuccess
-
 @Composable
 private fun TimingTab(tx: NetTransaction) {
     val dateFormat = remember { SimpleDateFormat("HH:mm:ss.SSS", Locale.getDefault()) }
-    val segments = remember(tx.dnsMs, tx.connectMs, tx.sslMs, tx.ttfbMs) {
+    val dnsColor = ColorPurple
+    val connectColor = ColorCyan
+    val sslColor = ColorPink
+    val ttfbColor = ColorAmber
+    val segments = remember(tx.dnsMs, tx.connectMs, tx.sslMs, tx.ttfbMs, dnsColor) {
         buildList {
-            tx.dnsMs?.let     { add(PhaseSegment("DNS lookup",    it, PhaseDns))      }
-            tx.connectMs?.let { add(PhaseSegment("TCP connect",   it, PhaseConnect))  }
-            tx.sslMs?.let     { add(PhaseSegment("TLS handshake", it, PhaseSsl))      }
-            tx.ttfbMs?.let    { add(PhaseSegment("TTFB",          it, PhaseTtfb))     }
+            tx.dnsMs?.let     { add(PhaseSegment("DNS lookup",    it, dnsColor))     }
+            tx.connectMs?.let { add(PhaseSegment("TCP connect",   it, connectColor)) }
+            tx.sslMs?.let     { add(PhaseSegment("TLS handshake", it, sslColor))     }
+            tx.ttfbMs?.let    { add(PhaseSegment("TTFB",          it, ttfbColor))    }
         }
     }
     val total = remember(segments) { segments.sumOf { it.durationMs }.coerceAtLeast(1L) }
@@ -580,7 +589,7 @@ private fun TimingTab(tx: NetTransaction) {
                         fontFamily = FontFamily.Monospace,
                     )
                     Spacer(Modifier.height(2.dp))
-                    Text(text = "Started", color = NetScopeMuted, fontSize = 8.sp,
+                    Text(text = "Started", color = NetScopeMuted, fontSize = 10.sp,
                         fontFamily = FontFamily.SansSerif)
                 }
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -592,7 +601,7 @@ private fun TimingTab(tx: NetTransaction) {
                         fontFamily = FontFamily.Monospace,
                     )
                     Spacer(Modifier.height(2.dp))
-                    Text(text = "Completed", color = NetScopeMuted, fontSize = 8.sp,
+                    Text(text = "Completed", color = NetScopeMuted, fontSize = 10.sp,
                         fontFamily = FontFamily.SansSerif)
                 }
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -604,7 +613,7 @@ private fun TimingTab(tx: NetTransaction) {
                         fontFamily = FontFamily.Monospace,
                     )
                     Spacer(Modifier.height(2.dp))
-                    Text(text = "Total", color = NetScopeMuted, fontSize = 8.sp,
+                    Text(text = "Total", color = NetScopeMuted, fontSize = 10.sp,
                         fontFamily = FontFamily.SansSerif)
                 }
             }
@@ -633,7 +642,7 @@ private fun TimingTab(tx: NetTransaction) {
                             Text(
                                 text     = seg.label,
                                 color    = NetScopeText2,
-                                fontSize = 9.sp,
+                                fontSize = 10.sp,
                                 fontFamily = FontFamily.SansSerif,
                                 modifier = Modifier.width(90.dp),
                             )
@@ -657,7 +666,7 @@ private fun TimingTab(tx: NetTransaction) {
                             Text(
                                 text       = "${seg.durationMs}ms",
                                 color      = NetScopeOnSurface,
-                                fontSize   = 9.sp,
+                                fontSize   = 10.sp,
                                 fontFamily = FontFamily.SansSerif,
                                 modifier   = Modifier.width(36.dp),
                             )
@@ -674,7 +683,7 @@ private fun TimingTab(tx: NetTransaction) {
                 Text(
                     text     = "Timeline (${total}ms total)",
                     color    = NetScopeMuted,
-                    fontSize = 9.sp,
+                    fontSize = 10.sp,
                     fontFamily = FontFamily.SansSerif,
                 )
                 // Stacked bar
@@ -719,7 +728,7 @@ private fun TimingTab(tx: NetTransaction) {
                             Text(
                                 text     = seg.label.substringBefore(" "),
                                 color    = NetScopeMuted,
-                                fontSize = 8.sp,
+                                fontSize = 10.sp,
                                 fontFamily = FontFamily.SansSerif,
                             )
                         }
@@ -803,16 +812,12 @@ private fun HttpMessageTab(
         }
         body?.let { b ->
             item(key = "bodyTitle", contentType = "bodyTitle") {
-                SectionCard(
-                    title    = "Body",
-                    onCopy   = {
+                BodyTitle(
+                    onCopy = {
                         NetScopeExporter.copyToClipboard(context, b, bodyLabel)
                         onCopied(bodyLabel)
                     },
-                    modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 8.dp),
-                ) {
-                    // empty header only — body rendered separately as json-block
-                }
+                )
             }
             val formatted = formattedBody
             if (formatted == null) {
@@ -822,7 +827,6 @@ private fun HttpMessageTab(
                     BodyLine(
                         line = formatted.lines[index],
                         kind = formatted.kind,
-                        isFirst = index == 0,
                         isLast = index == formatted.lines.lastIndex,
                     )
                 }
@@ -873,17 +877,7 @@ private fun SectionCard(
                 fontFamily = FontFamily.SansSerif,
             )
             if (onCopy != null) {
-                IconButton(
-                    onClick  = onCopy,
-                    modifier = Modifier.size(20.dp),
-                ) {
-                    Icon(
-                        imageVector        = Icons.Default.ContentCopy,
-                        contentDescription = "Copy $title",
-                        tint               = NetScopeMuted,
-                        modifier           = Modifier.size(13.dp),
-                    )
-                }
+                CopyButton(description = "Copy $title", onClick = onCopy)
             }
         }
         androidx.compose.material3.HorizontalDivider(color = NetScopeBorder, thickness = 0.5.dp)
@@ -948,7 +942,7 @@ private fun HeaderTable(headers: List<NetHeader>) {
                 )
                 Text(
                     text       = header.value,
-                    color      = if (header.isRedacted) ColorError.copy(alpha = 0.7f) else NetScopeOnSurface,
+                    color      = if (header.isRedacted) ColorError else NetScopeOnSurface,
                     fontSize   = 10.sp,
                     fontFamily = FontFamily.Monospace,
                     modifier   = Modifier.weight(0.6f),
@@ -964,34 +958,65 @@ private fun HeaderTable(headers: List<NetHeader>) {
 
 private val BodyEdgeRadius = 12.dp
 
+/** The head of the body block, which its lines continue in the same surface. */
+@Composable
+private fun BodyTitle(onCopy: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .padding(horizontal = 12.dp)
+            .fillMaxWidth()
+            .background(
+                color = NetScopeCardAlt,
+                shape = RoundedCornerShape(topStart = BodyEdgeRadius, topEnd = BodyEdgeRadius),
+            )
+            .padding(start = 12.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text       = "Body",
+            color      = NetScopeAccent,
+            fontSize   = 11.sp,
+            fontWeight = FontWeight.Bold,
+        )
+        CopyButton(description = "Copy Body", onClick = onCopy)
+    }
+}
+
 /** One line of a body. Lines wrap: a shared horizontal scroll cannot span the items of a lazy list. */
 @Composable
-private fun BodyLine(line: String, kind: BodyKind, isFirst: Boolean, isLast: Boolean) {
-    val text = remember(line, kind) { line.highlighted(kind = kind) }
+private fun BodyLine(line: String, kind: BodyKind, isLast: Boolean) {
+    val syntax = NetScopeSyntax
+    val text = remember(line, kind, syntax) { line.highlighted(kind = kind, colors = syntax) }
     Text(
         text       = text,
-        fontSize   = 10.sp,
+        fontSize   = 11.sp,
         fontFamily = FontFamily.Monospace,
-        lineHeight = 17.5.sp,
+        lineHeight = 18.sp,
         modifier   = Modifier
             .padding(horizontal = 12.dp)
             .fillMaxWidth()
             .background(
                 color = NetScopeCardAlt,
                 shape = RoundedCornerShape(
-                    topStart = if (isFirst) BodyEdgeRadius else 0.dp,
-                    topEnd = if (isFirst) BodyEdgeRadius else 0.dp,
                     bottomStart = if (isLast) BodyEdgeRadius else 0.dp,
                     bottomEnd = if (isLast) BodyEdgeRadius else 0.dp,
                 ),
             )
-            .padding(
-                start = 12.dp,
-                end = 12.dp,
-                top = if (isFirst) 12.dp else 0.dp,
-                bottom = if (isLast) 12.dp else 0.dp,
-            ),
+            .padding(start = 12.dp, end = 12.dp, bottom = if (isLast) 12.dp else 0.dp),
     )
+}
+
+@Composable
+private fun CopyButton(description: String, onClick: () -> Unit) {
+    IconButton(onClick = onClick, modifier = Modifier.size(32.dp)) {
+        Icon(
+            imageVector        = Icons.Default.ContentCopy,
+            contentDescription = description,
+            tint               = NetScopeMuted,
+            modifier           = Modifier.size(15.dp),
+        )
+    }
 }
 
 @Composable

@@ -1,10 +1,10 @@
 package io.netscope.ui.detail
 
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
+import io.netscope.ui.component.SyntaxColors
 
 /** The syntax a body is highlighted with. */
 internal enum class BodyKind { JSON, XML, PLAIN }
@@ -32,11 +32,11 @@ internal fun formatBody(body: String): FormattedBody {
 }
 
 /** This line in colour. A line is short enough to do this while composing it. */
-internal fun String.highlighted(kind: BodyKind): AnnotatedString = buildAnnotatedString {
+internal fun String.highlighted(kind: BodyKind, colors: SyntaxColors): AnnotatedString = buildAnnotatedString {
     when (kind) {
-        BodyKind.JSON -> appendJsonHighlighted(json = this@highlighted)
-        BodyKind.XML -> appendXmlHighlighted(xml = this@highlighted)
-        BodyKind.PLAIN -> withStyle(SpanStyle(color = JsonDefaultColor)) { append(this@highlighted) }
+        BodyKind.JSON -> appendJsonHighlighted(json = this@highlighted, colors = colors)
+        BodyKind.XML -> appendXmlHighlighted(xml = this@highlighted, colors = colors)
+        BodyKind.PLAIN -> withStyle(SpanStyle(color = colors.plain)) { append(this@highlighted) }
     }
 }
 
@@ -55,14 +55,7 @@ private fun String.toDisplayLines(): List<String> = buildList {
 
 // ── JSON syntax highlighting ──────────────────────────────────────────────────
 
-private val JsonKeyColor     = Color(0xFF7DD3FC)
-private val JsonStringColor  = Color(0xFF86EFAC)
-private val JsonNumberColor  = Color(0xFFFBBF24)
-private val JsonKeywordColor = Color(0xFFA78BFA)
-private val JsonPunctColor   = Color(0xFF6B7FA3)
-private val JsonDefaultColor = Color(0xFFCDD6F4)
-
-private fun AnnotatedString.Builder.appendJsonHighlighted(json: String) {
+private fun AnnotatedString.Builder.appendJsonHighlighted(json: String, colors: SyntaxColors) {
     var i = 0
 
     fun peekIsColon(): Boolean {
@@ -86,79 +79,79 @@ private fun AnnotatedString.Builder.appendJsonHighlighted(json: String) {
                 }
                 // A cut line can end on the backslash of an escape
                 i = minOf(i, json.length)
-                val color = if (peekIsColon()) JsonKeyColor else JsonStringColor
+                val color = if (peekIsColon()) colors.key else colors.string
                 withStyle(SpanStyle(color = color)) { append(json.substring(start, i)) }
             }
             ch == '-' || ch.isDigit() -> {
                 val start = i
                 if (ch == '-') i++
                 while (i < json.length && (json[i].isDigit() || json[i] == '.' || json[i] in "eE+-")) i++
-                withStyle(SpanStyle(color = JsonNumberColor)) { append(json.substring(start, i)) }
+                withStyle(SpanStyle(color = colors.number)) { append(json.substring(start, i)) }
             }
-            json.startsWith("true",  i) -> { withStyle(SpanStyle(color = JsonKeywordColor)) { append("true")  }; i += 4 }
-            json.startsWith("false", i) -> { withStyle(SpanStyle(color = JsonKeywordColor)) { append("false") }; i += 5 }
-            json.startsWith("null",  i) -> { withStyle(SpanStyle(color = JsonKeywordColor)) { append("null")  }; i += 4 }
-            ch in "{}[],:." -> { withStyle(SpanStyle(color = JsonPunctColor)) { append(ch) }; i++ }
-            else -> { withStyle(SpanStyle(color = JsonDefaultColor)) { append(ch) }; i++ }
+            json.startsWith("true",  i) -> { withStyle(SpanStyle(color = colors.keyword)) { append("true")  }; i += 4 }
+            json.startsWith("false", i) -> { withStyle(SpanStyle(color = colors.keyword)) { append("false") }; i += 5 }
+            json.startsWith("null",  i) -> { withStyle(SpanStyle(color = colors.keyword)) { append("null")  }; i += 4 }
+            ch in "{}[],:." -> { withStyle(SpanStyle(color = colors.punctuation)) { append(ch) }; i++ }
+            else -> { withStyle(SpanStyle(color = colors.plain)) { append(ch) }; i++ }
         }
     }
 }
 
 // ── XML syntax highlighting ───────────────────────────────────────────────────
 
-private fun AnnotatedString.Builder.appendXmlHighlighted(xml: String) {
+private fun AnnotatedString.Builder.appendXmlHighlighted(xml: String, colors: SyntaxColors) {
     var i = 0
     while (i < xml.length) {
         when {
             xml.startsWith("<!--", i) -> {
                 val end = xml.indexOf("-->", i + 4).let { if (it == -1) xml.length else it + 3 }
-                withStyle(SpanStyle(color = JsonPunctColor)) { append(xml.substring(i, end)) }
+                withStyle(SpanStyle(color = colors.punctuation)) { append(xml.substring(i, end)) }
                 i = end
             }
             xml.startsWith("<?", i) -> {
                 val end = xml.indexOf("?>", i + 2).let { if (it == -1) xml.length else it + 2 }
-                withStyle(SpanStyle(color = JsonKeywordColor)) { append(xml.substring(i, end)) }
+                withStyle(SpanStyle(color = colors.keyword)) { append(xml.substring(i, end)) }
                 i = end
             }
             xml[i] == '<' -> {
-                withStyle(SpanStyle(color = JsonPunctColor)) { append('<') }
+                withStyle(SpanStyle(color = colors.punctuation)) { append('<') }
                 i++
                 if (i < xml.length && xml[i] == '/') {
-                    withStyle(SpanStyle(color = JsonPunctColor)) { append('/') }
+                    withStyle(SpanStyle(color = colors.punctuation)) { append('/') }
                     i++
                 }
                 val nameStart = i
                 while (i < xml.length && xml[i] !in " \t\n\r>/") i++
-                withStyle(SpanStyle(color = JsonKeyColor)) { append(xml.substring(nameStart, i)) }
+                withStyle(SpanStyle(color = colors.key)) { append(xml.substring(nameStart, i)) }
                 while (i < xml.length && xml[i] != '>' && !(xml[i] == '/' && i + 1 < xml.length && xml[i + 1] == '>')) {
                     if (xml[i].isWhitespace()) { append(xml[i++]) }
                     else {
                         val attrStart = i
                         while (i < xml.length && xml[i] !in "= \t\n\r>/") i++
-                        withStyle(SpanStyle(color = JsonStringColor)) { append(xml.substring(attrStart, i)) }
+                        withStyle(SpanStyle(color = colors.string)) { append(xml.substring(attrStart, i)) }
                         if (i < xml.length && xml[i] == '=') {
-                            withStyle(SpanStyle(color = JsonPunctColor)) { append('=') }
+                            withStyle(SpanStyle(color = colors.punctuation)) { append('=') }
                             i++
                             if (i < xml.length && xml[i] == '"') {
                                 val q = i++
                                 while (i < xml.length && xml[i] != '"') i++
                                 if (i < xml.length) i++
-                                withStyle(SpanStyle(color = JsonNumberColor)) { append(xml.substring(q, i)) }
+                                withStyle(SpanStyle(color = colors.number)) { append(xml.substring(q, i)) }
                             }
                         } else if (i == attrStart) {
                             // A slash that closes nothing, as in href=/path: step over it
-                            withStyle(SpanStyle(color = JsonPunctColor)) { append(xml[i]) }
+                            withStyle(SpanStyle(color = colors.punctuation)) { append(xml[i]) }
                             i++
                         }
                     }
                 }
-                if (i < xml.length && xml[i] == '/') { withStyle(SpanStyle(color = JsonPunctColor)) { append('/') }; i++ }
-                if (i < xml.length && xml[i] == '>') { withStyle(SpanStyle(color = JsonPunctColor)) { append('>') }; i++ }
+                if (i < xml.length && xml[i] == '/') { withStyle(SpanStyle(color = colors.punctuation)) { append('/') }; i++ }
+                if (i < xml.length && xml[i] == '>') { withStyle(SpanStyle(color = colors.punctuation)) { append('>') }; i++ }
             }
             else -> {
                 val start = i
                 while (i < xml.length && xml[i] != '<') i++
-                withStyle(SpanStyle(color = JsonDefaultColor)) { append(xml.substring(start, i)) }
+                withStyle(SpanStyle(color = colors.plain)) { append(xml.substring(start, i)) }
             }
         }
     }
