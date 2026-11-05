@@ -35,7 +35,7 @@
 **`libs.versions.toml`**
 ```toml
 [versions]
-netscope = "0.7.0"
+netscope = "0.7.1"
 
 [libraries]
 netscope-core         = { group = "io.github.droidnest", name = "netscope-core",         version.ref = "netscope" }
@@ -233,6 +233,9 @@ never see the ViewModel, and navigation and open dialogs are part of the state.
 
 ## Changelog
 
+### v0.7.1
+- **Kotlin 2.0 apps** — the modules are compiled for Kotlin 2.0 and depend on `kotlin-stdlib` 2.0.21, so an app on Kotlin 2.0 or newer builds against them. 0.7.0 required Kotlin 2.2
+
 ### v0.7.0
 - **MVI architecture** — every screen now has one state and one intent entry point, with use cases split by area
 - **Live transaction detail** — a pending request fills in as soon as its response is saved; a request deleted while open is reported
@@ -305,7 +308,7 @@ never see the ViewModel, and navigation and open dialogs are part of the state.
 |---|---|
 | Min SDK | 23 (Android 6.0) |
 | OkHttp | 4.x or 5.x (`compileOnly` — your version is used) |
-| Kotlin | 1.9+ |
+| Kotlin | 2.0+ (the modules are compiled for Kotlin 2.0) |
 | Jetpack Compose | BOM 2024.x+ |
 | Room | 2.6+ |
 
