@@ -1,6 +1,8 @@
 import com.vanniktech.maven.publish.AndroidSingleVariantLibrary
 import com.vanniktech.maven.publish.MavenPublishBaseExtension
 import com.vanniktech.maven.publish.SonatypeHost
+import org.jetbrains.kotlin.gradle.dsl.KotlinAndroidProjectExtension
+import org.jetbrains.kotlin.gradle.dsl.KotlinVersion
 
 plugins {
     alias(libs.plugins.android.library) apply false
@@ -22,6 +24,20 @@ val descriptions = mapOf(
 )
 
 subprojects {
+    // ── Kotlin compatibility ──────────────────────────────────────────────────
+    // AGP's built-in Kotlin compiles with 2.2, whose metadata a Kotlin 2.0
+    // compiler refuses to read. Published modules target Kotlin 2.0 and
+    // depend on kotlin-stdlib 2.0, so apps on Kotlin 2.0 or newer can use them.
+    plugins.withId("com.vanniktech.maven.publish") {
+        extensions.configure<KotlinAndroidProjectExtension> {
+            coreLibrariesVersion = "2.0.21"
+            compilerOptions {
+                languageVersion.set(KotlinVersion.KOTLIN_2_0)
+                apiVersion.set(KotlinVersion.KOTLIN_2_0)
+            }
+        }
+    }
+
     // ── Maven publishing ──────────────────────────────────────────────────────
     plugins.withId("com.vanniktech.maven.publish") {
         val artifactId = project.name
