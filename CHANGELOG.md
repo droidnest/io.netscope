@@ -39,8 +39,6 @@ Planned work is in the [README roadmap](README.md#roadmap).
 - Database version 4 indexes `requestDate`; the migration keeps the stored traffic
 
 ### Fixed
-- `NetScopeActivity` is declared by `netscope-ui`, so apps no longer have to add it to their manifest. The
-  `<activity>` entry can be removed
 - Streaming responses such as `text/event-stream` are no longer held back by the capture
 - One-shot and duplex request bodies are left unread, and large ones are no longer read whole into memory
 - A row too large for Android's CursorWindow no longer crashes the app; existing ones are removed on upgrade
@@ -69,6 +67,14 @@ Planned work is in the [README roadmap](README.md#roadmap).
 - HAR files carry the library's version
 - TTFB is measured from the last request after a redirect
 - Stats and filtering no longer run on the main thread
+
+---
+
+## [0.7.2] - 2026-11-05
+
+### Fixed
+- `netscope-ui` declares `NetScopeActivity`, so apps no longer crash when they open the inspector. An
+  `<activity>` entry an app added for it can be removed
 
 ---
 
