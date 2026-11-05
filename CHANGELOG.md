@@ -6,6 +6,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.7.1] — 2026-11-05
+
+### Fixed
+- Apps on Kotlin 2.0 and 2.1 build against NetScope again. The modules are compiled for Kotlin 2.0 and depend
+  on `kotlin-stdlib` 2.0.21; 0.7.0 carried Kotlin 2.2 metadata and `kotlin-stdlib` 2.2.10, which those
+  compilers reject as "compiled with an incompatible version of Kotlin"
+
+---
+
 ## [0.7.0] — 2026-11-02
 
 ### Changed
