@@ -4,19 +4,20 @@ import io.netscope.NetScopeConfig
 import io.netscope.domain.repository.TransactionRepository
 import io.netscope.model.NetHeader
 import io.netscope.model.NetTransaction
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import okhttp3.Headers
 import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
+import okhttp3.ResponseBody.Companion.asResponseBody
 import okhttp3.internal.http.promisesBody
-import okio.Buffer
-import okio.GzipSource
+import okio.buffer
 import java.io.IOException
-import java.nio.charset.Charset
 
 /**
  * OkHttp [Interceptor] that captures every request/response and stores it
@@ -28,10 +29,13 @@ import java.nio.charset.Charset
  */
 class NetScopeInterceptor internal constructor(
     private val repository: TransactionRepository,
-    private val config: NetScopeConfig,
+    internal var config: NetScopeConfig,
+    /** Optional timing factory — when set, the interceptor registers call→id mappings. */
+    internal var timingFactory: NetScopeTimingListenerFactory? = null,
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : Interceptor {
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val scope = CoroutineScope(SupervisorJob() + ioDispatcher)
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
@@ -54,28 +58,28 @@ class NetScopeInterceptor internal constructor(
         // Persist request immediately so it appears in UI before response
         val transactionId = saveSync(transaction)
 
+        timingFactory?.register(chain.call(), transactionId)
+
         return try {
             val response = chain.proceed(request)
             val responseDate = System.currentTimeMillis()
 
-            val responseBodyString = if (response.promisesBody()) {
-                response.readBodyAsString(config.maxBodySize, config.alwaysReadResponseBody)
-            } else null
-
-            val updated = transaction.copy(
+            val completed = transaction.copy(
                 id = transactionId,
                 responseDate = responseDate,
                 durationMs = responseDate - requestDate,
                 responseCode = response.code,
                 responseMessage = response.message,
                 responseHeaders = response.headers.toNetHeaders(config.redactedHeaders),
-                responseBody = responseBodyString,
                 responseContentType = response.body?.contentType()?.toString(),
-                responseBodySize = responseBodyString?.length?.toLong() ?: 0L,
             )
 
-            saveAsync(updated)
-            response
+            val saved = saveAsync(completed)
+            if (response.promisesBody() && response.isCaptured(config.alwaysReadResponseBody)) {
+                response.capturingBody(completed = completed, saved = saved)
+            } else {
+                response
+            }
         } catch (e: IOException) {
             val updated = transaction.copy(
                 id = transactionId,
@@ -93,15 +97,14 @@ class NetScopeInterceptor internal constructor(
         var id = 0L
         // We use runBlocking here intentionally — the partial record must be
         // inserted before the network call returns so the UI reflects "pending".
-        kotlinx.coroutines.runBlocking(Dispatchers.IO) {
+        kotlinx.coroutines.runBlocking(ioDispatcher) {
             id = repository.insert(transaction)
         }
         return id
     }
 
-    private fun saveAsync(transaction: NetTransaction) {
+    private fun saveAsync(transaction: NetTransaction): Job =
         scope.launch { repository.update(transaction) }
-    }
 
     // ─── Extension helpers ────────────────────────────────────────────────────
 
@@ -116,41 +119,50 @@ class NetScopeInterceptor internal constructor(
 
     private fun Request.readBodyAsString(maxBytes: Long): String? {
         val body = body ?: return null
+        // Reading these would use up the only copy of the body, or wait for the server
+        if (body.isOneShot() || body.isDuplex()) return null
         return try {
-            val buffer = Buffer()
-            body.writeTo(buffer)
-            buffer.readString(minOf(buffer.size, maxBytes), Charset.forName("UTF-8"))
+            captureUpTo(maxBytes = maxBytes) { sink -> body.writeTo(sink) }.readUtf8()
         } catch (_: Exception) {
             null
         }
     }
 
-    private fun Response.readBodyAsString(maxBytes: Long, alwaysRead: Boolean): String? {
+    private fun Response.isCaptured(alwaysRead: Boolean): Boolean {
         val contentType = body?.contentType()?.toString() ?: ""
         val isTextType = contentType.contains("json", ignoreCase = true) ||
                 contentType.contains("xml", ignoreCase = true) ||
                 contentType.contains("text", ignoreCase = true) ||
                 contentType.contains("html", ignoreCase = true) ||
                 contentType.contains("form", ignoreCase = true)
+        return isTextType || alwaysRead
+    }
 
-        if (!isTextType && !alwaysRead) return null
-
-        return try {
-            val source = body?.source() ?: return null
-            source.request(maxBytes)
-            val buffer = source.buffer.clone()
-
-            // Handle gzip-encoded responses
-            val encoding = header("Content-Encoding") ?: ""
-            val finalBuffer = if (encoding.equals("gzip", ignoreCase = true)) {
-                Buffer().also { out -> GzipSource(buffer).use { gzip -> out.writeAll(gzip) } }
-            } else {
-                buffer
+    /**
+     * This response with a body that records what the app reads from it. Reading ahead here would
+     * hold the response back until [NetScopeConfig.maxBodySize] bytes arrive, forever on a stream.
+     */
+    private fun Response.capturingBody(completed: NetTransaction, saved: Job): Response {
+        val original = body ?: return this
+        val maxBytes = config.maxBodySize
+        val isGzip = header("Content-Encoding").equals("gzip", ignoreCase = true)
+        val capturing = CapturingSource(
+            delegate = original.source(),
+            maxBytes = maxBytes,
+        ) { captured, totalBytes ->
+            scope.launch {
+                saved.join()
+                val decoded = if (isGzip) captured.gunzipped(maxBytes = maxBytes) else captured
+                repository.update(
+                    completed.copy(
+                        responseBody = decoded.readUtf8(minOf(decoded.size, maxBytes)),
+                        responseBodySize = totalBytes,
+                    ),
+                )
             }
-
-            finalBuffer.readString(minOf(finalBuffer.size, maxBytes), Charset.forName("UTF-8"))
-        } catch (_: Exception) {
-            null
         }
+        return newBuilder()
+            .body(capturing.buffer().asResponseBody(original.contentType(), original.contentLength()))
+            .build()
     }
 }

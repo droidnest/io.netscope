@@ -1,15 +1,26 @@
 plugins {
     alias(libs.plugins.android.library)
+    alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.vanniktech.publish)
+    signing
+}
+
+mavenPublishing {
+}
+
+signing {
+    useGpgCmd()
+    sign(publishing.publications)
 }
 
 
 android {
     namespace = "io.netscope.ui"
-    compileSdk = 36
+    compileSdk = 35
 
     defaultConfig {
-        minSdk = 21
+        minSdk = 23
+        consumerProguardFiles("consumer-rules.pro")
     }
 
     buildFeatures {
@@ -27,6 +38,7 @@ android {
 
 dependencies {
     api(project(":netscope-core"))
+    implementation(project(":netscope-export"))
 
     val composeBom = platform(libs.compose.bom)
     implementation(composeBom)
@@ -42,4 +54,8 @@ dependencies {
     implementation(libs.coroutines.android)
 
     debugImplementation(libs.compose.ui.tooling)
+
+    testImplementation(libs.junit)
+    testImplementation(libs.coroutines.test)
+    testImplementation(libs.turbine)
 }

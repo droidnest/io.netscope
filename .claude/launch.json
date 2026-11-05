@@ -1,0 +1,29 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "Build All Modules",
+      "runtimeExecutable": "./gradlew",
+      "runtimeArgs": ["assembleDebug"],
+      "port": null
+    },
+    {
+      "name": "Publish to Local Maven",
+      "runtimeExecutable": "./gradlew",
+      "runtimeArgs": ["publishToMavenLocal"],
+      "port": null
+    },
+    {
+      "name": "Run Tests",
+      "runtimeExecutable": "./gradlew",
+      "runtimeArgs": ["test"],
+      "port": null
+    },
+    {
+      "name": "Lint All Modules",
+      "runtimeExecutable": "./gradlew",
+      "runtimeArgs": ["lint"],
+      "port": null
+    }
+  ]
+}

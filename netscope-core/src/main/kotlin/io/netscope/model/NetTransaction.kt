@@ -11,6 +11,12 @@ data class NetTransaction(
     val responseDate: Long? = null,  // epoch millis — when response was fully received
     val durationMs: Long? = null,    // responseDate - requestDate
 
+    // ── Network phase timing (null when connection was reused) ───────────
+    val dnsMs: Long? = null,         // DNS lookup duration
+    val connectMs: Long? = null,     // TCP connection duration
+    val sslMs: Long? = null,         // TLS handshake duration
+    val ttfbMs: Long? = null,        // time-to-first-byte (server processing)
+
     // ── Request ─────────────────────────────────────────────────────────────
     val method: String,
     val scheme: String,

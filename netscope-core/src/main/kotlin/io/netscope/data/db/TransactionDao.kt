@@ -5,6 +5,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
+import io.netscope.model.TrafficSummary
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -13,20 +14,42 @@ interface TransactionDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(entity: TransactionEntity): Long
 
-    @Update(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun update(entity: TransactionEntity)
+    /** Updates every column except the network-phase timing ones, which [updateTiming] owns. */
+    @Update(entity = TransactionEntity::class)
+    suspend fun updateWithoutTiming(transaction: TransactionWithoutTiming)
 
     @Query("SELECT * FROM transactions ORDER BY requestDate DESC")
     fun observeAll(): Flow<List<TransactionEntity>>
 
+    /** Reads no body, so a change costs little however many transactions are stored. */
+    @Query(
+        """
+        SELECT COUNT(*) AS requestCount,
+            COALESCE(SUM(error IS NOT NULL OR responseCode >= 400), 0) AS errorCount,
+            (SELECT responseCode FROM transactions ORDER BY requestDate DESC LIMIT 1) AS lastResponseCode
+        FROM transactions
+        """
+    )
+    fun observeSummary(): Flow<TrafficSummary>
+
     @Query("SELECT * FROM transactions WHERE id = :id LIMIT 1")
     suspend fun getById(id: Long): TransactionEntity?
+
+    @Query("SELECT * FROM transactions WHERE id = :id LIMIT 1")
+    fun observeById(id: Long): Flow<TransactionEntity?>
 
     @Query("DELETE FROM transactions")
     suspend fun deleteAll()
 
     @Query("SELECT COUNT(*) FROM transactions")
     suspend fun count(): Int
+
+    /** Updates only the network-phase timing columns for an existing transaction. */
+    @Query(
+        "UPDATE transactions SET dnsMs = :dnsMs, connectMs = :connectMs, " +
+        "sslMs = :sslMs, ttfbMs = :ttfbMs WHERE id = :id"
+    )
+    suspend fun updateTiming(id: Long, dnsMs: Long?, connectMs: Long?, sslMs: Long?, ttfbMs: Long?)
 
     /**
      * Prunes oldest transactions when the count exceeds [maxCount].
