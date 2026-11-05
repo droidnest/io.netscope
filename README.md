@@ -35,7 +35,7 @@
 **`libs.versions.toml`**
 ```toml
 [versions]
-netscope = "0.7.2"
+netscope = "0.7.3"
 
 [libraries]
 netscope-core         = { group = "io.github.droidnest", name = "netscope-core",         version.ref = "netscope" }
@@ -232,6 +232,9 @@ never see the ViewModel, and navigation and open dialogs are part of the state.
 ---
 
 ## Changelog
+
+### v0.7.3
+- **Compose 1.8+ apps** — `netscope-ui` no longer calls the experimental `FlowRow`, whose signature changed in Compose foundation 1.8, so Settings and the mock rule editor no longer crash with `NoSuchMethodError`. Tested on Compose 1.7, 1.8 and 1.12
 
 ### v0.7.2
 - **Inspector opens in every app** — `netscope-ui` declares `NetScopeActivity` in its own manifest, so a shake or a notification tap no longer crashes with `ActivityNotFoundException`. Apps that declared the activity themselves can remove that entry
