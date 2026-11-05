@@ -1,20 +1,15 @@
 package io.netscope.ui.mockrules
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.ui.draw.alpha
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -25,10 +20,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.outlined.Science
@@ -45,7 +38,6 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -65,8 +57,11 @@ import io.netscope.ui.component.NetScopeDarkBackground
 import io.netscope.ui.component.NetScopeMuted
 import io.netscope.ui.component.NetScopeOnSurface
 import io.netscope.ui.component.NetScopeSurface
+import io.netscope.ui.component.NetScopeOnAccent
+import io.netscope.ui.component.ScreenTitle
+import io.netscope.ui.component.statusColor
+import io.netscope.ui.component.ColorPending
 import io.netscope.ui.component.ColorError
-import io.netscope.ui.component.NetScopeText2
 import io.netscope.ui.component.methodColor
 import io.netscope.ui.mvi.UiIntent
 import io.netscope.ui.mvi.UiState
@@ -76,7 +71,6 @@ import io.netscope.ui.mvi.UiState
 internal fun MockRulesScreen(
     uiState: UiState<MockRulesUiState>,
     onIntent: (UiIntent) -> Unit,
-    onBack: () -> Unit,
     onAddRule: () -> Unit,
     onEditRule: (String) -> Unit,
 ) {
@@ -94,69 +88,16 @@ internal fun MockRulesScreen(
     }
 
     Scaffold(
+        // The bottom bar of the graph already keeps clear of the navigation bar
+        contentWindowInsets = WindowInsets(0),
         topBar = {
             TopAppBar(
                 title = {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(8.dp)
-                                .clip(CircleShape)
-                                .background(NetScopeAccent),
-                        )
-                        Column {
-                            Text(
-                                text = "Mock Rules",
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 17.sp,
-                                color = NetScopeOnSurface,
-                                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-                                letterSpacing = (-0.3).sp,
-                            )
-                            if (rules.isNotEmpty()) {
-                                val activeCount = rules.count { it.isEnabled }
-                                Text(
-                                    text = "${rules.size} RULES · $activeCount ACTIVE",
-                                    color = NetScopeText2,
-                                    fontSize = 9.sp,
-                                    letterSpacing = 0.8.sp,
-                                )
-                            }
-                        }
-                        val activeCount = rules.count { it.isEnabled }
-                        AnimatedVisibility(
-                            visible = activeCount > 0,
-                            enter = scaleIn(tween(150)) + fadeIn(tween(150)),
-                            exit = fadeOut(tween(100)),
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(20.dp))
-                                    .background(ColorSuccess.copy(alpha = 0.15f))
-                                    .border(0.5.dp, ColorSuccess.copy(alpha = 0.4f), RoundedCornerShape(20.dp))
-                                    .padding(horizontal = 8.dp, vertical = 2.dp),
-                            ) {
-                                Text(
-                                    text = "$activeCount active",
-                                    color = ColorSuccess,
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                )
-                            }
-                        }
-                    }
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
-                            tint = NetScopeOnSurface,
-                        )
-                    }
+                    ScreenTitle(
+                        text = "Mock Rules",
+                        subtitle = if (rules.isEmpty()) null
+                                   else "${rules.size} rules · ${rules.count { it.isEnabled }} active",
+                    )
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = NetScopeSurface),
             )
@@ -165,7 +106,7 @@ internal fun MockRulesScreen(
             FloatingActionButton(
                 onClick = { onIntent(MockRulesUiIntent.AddClicked) },
                 containerColor = NetScopeAccent,
-                contentColor = Color.White,
+                contentColor = NetScopeOnAccent,
                 elevation = FloatingActionButtonDefaults.elevation(0.dp),
                 shape = RoundedCornerShape(16.dp),
             ) {
@@ -179,22 +120,11 @@ internal fun MockRulesScreen(
         } else {
             LazyColumn(
                 contentPadding = PaddingValues(
-                    start = 12.dp, end = 12.dp, top = 0.dp, bottom = 88.dp,
+                    start = 12.dp, end = 12.dp, top = 10.dp, bottom = 88.dp,
                 ),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
                 modifier = Modifier.padding(innerPadding),
             ) {
-                item {
-                    val activeCount = rules.count { it.isEnabled }
-                    Text(
-                        text          = "${rules.size} rules · $activeCount active",
-                        color         = NetScopeMuted,
-                        fontSize      = 8.sp,
-                        fontFamily    = androidx.compose.ui.text.font.FontFamily.SansSerif,
-                        letterSpacing = 1.8.sp,
-                        modifier      = Modifier.padding(start = 2.dp, top = 10.dp, bottom = 6.dp),
-                    )
-                }
                 items(rules, key = { it.id }) { rule ->
                     MockRuleItem(
                         rule     = rule,
@@ -244,7 +174,6 @@ private fun MockRuleItem(
         Column(
             modifier = Modifier
                 .weight(1f)
-                .alpha(if (rule.isEnabled) 1f else 0.5f)
                 .padding(horizontal = 12.dp, vertical = 10.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
@@ -272,15 +201,15 @@ private fun MockRuleItem(
             ) {
                 Text(
                     text     = rule.matchType.label,
-                    color    = NetScopeAccent.copy(alpha = if (rule.isEnabled) 0.6f else 0.3f),
-                    fontSize = 9.sp,
+                    color    = if (rule.isEnabled) NetScopeAccent else NetScopeMuted,
+                    fontSize = 10.sp,
                     fontFamily = FontFamily.Monospace,
                     fontWeight = FontWeight.SemiBold,
                 )
                 Text(
                     text     = rule.urlPattern,
-                    color    = NetScopeMuted.copy(alpha = if (rule.isEnabled) 1f else 0.5f),
-                    fontSize = 9.sp,
+                    color    = NetScopeMuted,
+                    fontSize = 10.sp,
                     fontFamily = FontFamily.Monospace,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -290,8 +219,8 @@ private fun MockRuleItem(
             if (rule.delayMs > 0) {
                 Text(
                     text     = "${rule.delayMs}ms delay",
-                    color    = NetScopeMuted.copy(alpha = if (rule.isEnabled) 0.75f else 0.4f),
-                    fontSize = 9.sp,
+                    color    = NetScopeMuted,
+                    fontSize = 10.sp,
                     fontFamily = FontFamily.Monospace,
                 )
             }
@@ -324,7 +253,7 @@ private fun MockRuleItem(
                 Icon(
                     imageVector = Icons.Default.Delete,
                     contentDescription = "Delete rule",
-                    tint = ColorError.copy(alpha = 0.6f),
+                    tint = ColorError,
                     modifier = Modifier.size(16.dp),
                 )
             }
@@ -334,12 +263,7 @@ private fun MockRuleItem(
 
 @Composable
 private fun StatusCodeBadge(code: Int, enabled: Boolean) {
-    val color = when (code) {
-        in 200..299 -> ColorSuccess
-        in 300..399 -> Color(0xFF60A5FA)
-        in 400..499 -> Color(0xFFFFB547)
-        else        -> ColorError
-    }.let { if (enabled) it else it.copy(alpha = 0.4f) }
+    val color = if (enabled) statusColor(code = code) else ColorPending
 
     Box(
         modifier = Modifier

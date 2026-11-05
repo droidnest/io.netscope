@@ -1,6 +1,7 @@
 package io.netscope.data.db
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 import androidx.room.TypeConverter
 import androidx.room.TypeConverters
@@ -8,7 +9,7 @@ import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import io.netscope.model.NetHeader
 
-@Entity(tableName = "transactions")
+@Entity(tableName = "transactions", indices = [Index("requestDate")])
 @TypeConverters(HeaderListConverter::class)
 data class TransactionEntity(
     @PrimaryKey(autoGenerate = true)

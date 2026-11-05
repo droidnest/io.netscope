@@ -11,7 +11,7 @@ import io.netscope.data.mapper.TransactionMapper
 
 @Database(
     entities = [TransactionEntity::class],
-    version = 3,
+    version = 4,
     exportSchema = false,
 )
 @TypeConverters(HeaderListConverter::class)
@@ -32,7 +32,7 @@ abstract class NetScopeDatabase : RoomDatabase() {
                     NetScopeDatabase::class.java,
                     DB_NAME,
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                     // Captured traffic is disposable: a DB with no migration path is rebuilt, not kept.
                     .fallbackToDestructiveMigration(dropAllTables = true)
                     .build()
@@ -59,6 +59,15 @@ abstract class NetScopeDatabase : RoomDatabase() {
                         "COALESCE(LENGTH(CAST(requestBody AS BLOB)), 0) + " +
                         "COALESCE(LENGTH(CAST(responseBody AS BLOB)), 0) > " +
                         2 * TransactionMapper.MAX_STORED_BODY_BYTES,
+                )
+            }
+        }
+
+        /** Indexes the column every list is sorted on and the pruning after each insert reads. */
+        private val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_transactions_requestDate ON transactions (requestDate)",
                 )
             }
         }

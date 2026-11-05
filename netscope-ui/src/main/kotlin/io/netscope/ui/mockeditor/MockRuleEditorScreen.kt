@@ -174,12 +174,13 @@ internal fun MockRuleEditorScreen(
                 FieldLabel("HTTP METHOD")
                 val muted = NetScopeMuted
                 val methods = listOf(null, "GET", "POST", "PUT", "PATCH", "DELETE")
+                val methodColors = methods.associateWith { it?.methodColor() ?: muted }
                 SegmentedPicker(
                     options = methods,
                     selected = form.method,
                     onSelect = { onIntent(MockRuleEditorUiIntent.MethodSelected(method = it)) },
                     label = { it ?: "ANY" },
-                    chipColor = { opt -> opt?.let { it.methodColor() } ?: muted },
+                    chipColor = { opt -> methodColors[opt] ?: muted },
                 )
             }
 
@@ -349,7 +350,7 @@ private fun RulePreview(
         Text(
             text = "RULE PREVIEW",
             color = NetScopeMuted,
-            fontSize = 9.sp,
+            fontSize = 10.sp,
             letterSpacing = 1.4.sp,
             fontWeight = FontWeight.SemiBold,
         )
@@ -400,7 +401,7 @@ private fun FieldLabel(text: String) {
     Text(
         text = text,
         color = NetScopeAccent,
-        fontSize = 9.sp,
+        fontSize = 10.sp,
         fontWeight = FontWeight.SemiBold,
         letterSpacing = 1.4.sp,
     )

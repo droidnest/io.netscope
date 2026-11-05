@@ -6,6 +6,7 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
 import io.netscope.model.TrafficSummary
+import io.netscope.model.TransactionSummary
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -21,6 +22,33 @@ interface TransactionDao {
     @Query("SELECT * FROM transactions ORDER BY requestDate DESC")
     fun observeAll(): Flow<List<TransactionEntity>>
 
+    /** Reads no body and no header, so a change costs little however large the traffic is. */
+    @Query(
+        """
+        SELECT id, requestDate, durationMs, method, host, path, query, requestBodySize,
+            responseCode, responseBodySize, error
+        FROM transactions ORDER BY requestDate DESC
+        """
+    )
+    fun observeSummaries(): Flow<List<TransactionSummary>>
+
+    /** Ids of the transactions whose URL, method, code or a body is LIKE [pattern], with `\` as the escape. */
+    @Query(
+        """
+        SELECT id FROM transactions
+        WHERE scheme || '://' || host || path || COALESCE('?' || query, '') LIKE :pattern ESCAPE '\'
+            OR method LIKE :pattern ESCAPE '\'
+            OR CAST(responseCode AS TEXT) LIKE :pattern ESCAPE '\'
+            OR requestBody LIKE :pattern ESCAPE '\'
+            OR responseBody LIKE :pattern ESCAPE '\'
+        """
+    )
+    suspend fun idsMatching(pattern: String): List<Long>
+
+    /** The request headers of every transaction: their stored JSON cannot be searched with LIKE. */
+    @Query("SELECT id, requestHeaders FROM transactions")
+    suspend fun requestHeaders(): List<RequestHeadersRow>
+
     /** Reads no body, so a change costs little however many transactions are stored. */
     @Query(
         """
@@ -34,6 +62,9 @@ interface TransactionDao {
 
     @Query("SELECT * FROM transactions WHERE id = :id LIMIT 1")
     suspend fun getById(id: Long): TransactionEntity?
+
+    @Query("SELECT * FROM transactions WHERE id IN (:ids)")
+    suspend fun getByIds(ids: List<Long>): List<TransactionEntity>
 
     @Query("SELECT * FROM transactions WHERE id = :id LIMIT 1")
     fun observeById(id: Long): Flow<TransactionEntity?>

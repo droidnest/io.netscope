@@ -19,7 +19,7 @@ data class TransactionStats(
     /** Completed requests per duration range, empty ranges left out. */
     val durationBuckets: List<Pair<DurationBucket, Int>>,
     /** The five slowest completed requests, slowest first. */
-    val slowestRequests: List<NetTransaction>,
+    val slowestRequests: List<TransactionSummary>,
     /** The five most called hosts, most called first. */
     val topHosts: List<Pair<String, Int>>,
     /** Median duration of the completed requests. */

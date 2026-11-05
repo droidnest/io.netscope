@@ -36,6 +36,10 @@ android {
     kotlin { jvmToolchain(17) }
 }
 
+composeCompiler {
+    stabilityConfigurationFiles.add(layout.projectDirectory.file("compose_stability.conf"))
+}
+
 dependencies {
     api(project(":netscope-core"))
     implementation(project(":netscope-export"))

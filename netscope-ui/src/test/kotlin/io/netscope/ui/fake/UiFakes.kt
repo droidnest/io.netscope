@@ -9,10 +9,12 @@ import io.netscope.model.NetTransaction
 import io.netscope.model.SettingChange
 import io.netscope.model.Settings
 import io.netscope.model.TrafficSummary
+import io.netscope.model.TransactionSummary
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.update
 
 class FakeTransactionRepository(
@@ -21,11 +23,19 @@ class FakeTransactionRepository(
 
     val transactions = MutableStateFlow(transactions)
 
+    /** Every query [observeSummaries] was called with. */
+    val searchedQueries = mutableListOf<String>()
+
     override suspend fun insert(transaction: NetTransaction): Long = transaction.id
 
     override suspend fun update(transaction: NetTransaction) = Unit
 
     override fun observeAll(): Flow<List<NetTransaction>> = transactions
+
+    override fun observeSummaries(query: String): Flow<List<TransactionSummary>> = transactions.onStart { searchedQueries += query }.map { list ->
+        list.filter { query.isBlank() || it.url.contains(query, ignoreCase = true) || it.responseBody?.contains(query) == true }
+            .map { it.toSummary() }
+    }
 
     override fun observeSummary(): Flow<TrafficSummary> = transactions.map { list ->
         TrafficSummary(
@@ -36,6 +46,9 @@ class FakeTransactionRepository(
     }
 
     override suspend fun getById(id: Long): NetTransaction? = transactions.value.find { it.id == id }
+
+    override suspend fun getByIds(ids: List<Long>): List<NetTransaction> =
+        ids.mapNotNull { id -> transactions.value.find { it.id == id } }
 
     override fun observeById(id: Long): Flow<NetTransaction?> =
         transactions.map { list -> list.find { it.id == id } }
@@ -94,6 +107,20 @@ fun aSettings(
     shakeToOpen = true,
     notificationStyle = NotificationStyle.DETAILED,
     lockedRedactedHeaders = lockedRedactedHeaders,
+)
+
+fun NetTransaction.toSummary() = TransactionSummary(
+    id = id,
+    requestDate = requestDate,
+    durationMs = durationMs,
+    method = method,
+    host = host,
+    path = path,
+    query = query,
+    requestBodySize = requestBodySize,
+    responseCode = responseCode,
+    responseBodySize = responseBodySize,
+    error = error,
 )
 
 fun aTransaction(

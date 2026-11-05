@@ -1,10 +1,15 @@
 package io.netscope.ui.transactions.list
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.VisibilityThreshold
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -16,6 +21,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -23,7 +29,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -43,6 +51,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.FilterListOff
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Share
@@ -52,7 +61,6 @@ import io.netscope.export.NetScopeExporter
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
@@ -60,23 +68,31 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.netscope.model.SortOrder
 import io.netscope.model.NetTransaction
 import io.netscope.model.TransactionStats
+import io.netscope.model.TransactionSummary
 import io.netscope.ui.component.ColorAmber
 import io.netscope.ui.component.ColorPurple
 import io.netscope.ui.component.ColorSuccess
@@ -90,6 +106,8 @@ import io.netscope.ui.component.NetScopeOnSurface
 import io.netscope.ui.component.NetScopeSurface
 import io.netscope.ui.component.TransactionItem
 import io.netscope.ui.component.formatBytes
+import io.netscope.ui.component.scrollEdgeFade
+import io.netscope.ui.component.scrollIndicator
 import io.netscope.ui.component.color
 import io.netscope.ui.mvi.UiIntent
 import io.netscope.ui.mvi.UiState
@@ -97,6 +115,7 @@ import io.netscope.ui.transactions.TransactionsMenu
 import io.netscope.ui.transactions.TransactionsUiIntent
 import io.netscope.ui.transactions.TransactionsUiState
 import io.netscope.ui.transactions.model.TransactionFilterUi
+import kotlinx.coroutines.launch
 
 private val STATUS_FILTER_CHIPS = listOf(
     "2xx" to setOf(NetTransaction.StatusClass.SUCCESS),
@@ -107,6 +126,22 @@ private val STATUS_FILTER_CHIPS = listOf(
 )
 
 private val METHOD_CHIPS = listOf("GET", "POST", "PUT", "PATCH", "DELETE")
+
+/** How far down the list, in rows, the jump back to the top appears. */
+private const val JUMP_TO_TOP_FROM_INDEX = 5
+
+/** A longer jump snaps this close to the top first, so it does not compose every row on the way. */
+private const val JUMP_SNAP_INDEX = 10
+
+private val PILL_SLIDE = spring(
+    stiffness = Spring.StiffnessMedium,
+    visibilityThreshold = IntOffset.VisibilityThreshold,
+)
+private val ROW_FADE_IN = tween<Float>(durationMillis = 150)
+private val ROW_PLACEMENT = spring(
+    stiffness = Spring.StiffnessMediumLow,
+    visibilityThreshold = IntOffset.VisibilityThreshold,
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -121,6 +156,14 @@ internal fun TransactionListScreen(
     val searchQuery = content.query
     val filterState = content.filter
     val context = LocalContext.current
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+
+    // The list starts from its top whenever what it shows is changed
+    val onFilterIntent: (UiIntent) -> Unit = { intent ->
+        onIntent(intent)
+        scope.launch { listState.scrollToItem(index = 0) }
+    }
 
     if (state is TransactionsUiState.Navigating) {
         LaunchedEffect(key1 = state.openedTransactionId) {
@@ -129,7 +172,21 @@ internal fun TransactionListScreen(
         }
     }
 
+    if (state is TransactionsUiState.SharingHar) {
+        LaunchedEffect(key1 = state.har) {
+            NetScopeExporter.share(
+                context = context,
+                text = state.har,
+                chooserTitle = "Export as HAR",
+                fileName = "netscope.har",
+            )
+            onIntent(TransactionsUiIntent.ShareHandled)
+        }
+    }
+
     Scaffold(
+        // The bottom bar of the graph already keeps clear of the navigation bar
+        contentWindowInsets = WindowInsets(0),
         topBar = {
             TopAppBar(
                 title = {
@@ -152,8 +209,9 @@ internal fun TransactionListScreen(
                         Box(
                             modifier = Modifier
                                 .size(8.dp)
-                                .clip(CircleShape)
-                                .background(accent.copy(alpha = dotAlpha)),
+                                // Read in the layer: the pulse must not recompose the bar every frame
+                                .graphicsLayer { alpha = dotAlpha }
+                                .background(accent, CircleShape),
                         )
                         Text(
                             text = buildAnnotatedString {
@@ -174,7 +232,7 @@ internal fun TransactionListScreen(
                         enter = scaleIn(tween(150)) + fadeIn(tween(150)),
                         exit = fadeOut(tween(100)),
                     ) {
-                        IconButton(onClick = { onIntent(TransactionsUiIntent.ClearFiltersClicked) }) {
+                        IconButton(onClick = { onFilterIntent(TransactionsUiIntent.ClearFiltersClicked) }) {
                             Icon(
                                 imageVector = Icons.Default.FilterListOff,
                                 contentDescription = "Clear filters",
@@ -217,7 +275,7 @@ internal fun TransactionListScreen(
                                             )
                                         }
                                     },
-                                    onClick = { onIntent(TransactionsUiIntent.SortOrderSelected(sortOrder = order)) },
+                                    onClick = { onFilterIntent(TransactionsUiIntent.SortOrderSelected(sortOrder = order)) },
                                 )
                             }
                         }
@@ -242,15 +300,7 @@ internal fun TransactionListScreen(
                                     Icon(Icons.Default.Share, contentDescription = null, tint = NetScopeMuted, modifier = Modifier.size(16.dp))
                                 },
                                 enabled = transactions.isNotEmpty(),
-                                onClick = {
-                                    onIntent(TransactionsUiIntent.MenuDismissed)
-                                    NetScopeExporter.share(
-                                        context = context,
-                                        text = NetScopeExporter.toHar(transactions),
-                                        chooserTitle = "Export as HAR",
-                                        fileName = "netscope.har",
-                                    )
-                                },
+                                onClick = { onIntent(TransactionsUiIntent.ExportClicked) },
                             )
                         }
                     }
@@ -276,46 +326,155 @@ internal fun TransactionListScreen(
             // Search bar
             SearchBar(
                 query = searchQuery,
-                onQueryChange = { onIntent(TransactionsUiIntent.QueryTyped(query = it)) },
+                onQueryChange = { onFilterIntent(TransactionsUiIntent.QueryTyped(query = it)) },
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
             )
 
             // Filter chips — single scrollable row
             FilterBar(
                 filterState = filterState,
-                onMethodToggle = { onIntent(TransactionsUiIntent.MethodToggled(method = it)) },
-                onStatusToggle = { onIntent(TransactionsUiIntent.StatusClassToggled(statusClass = it)) },
-            )
-
-            // Stats summary — count · errors · avg time
-            if (transactions.isNotEmpty()) {
-                StatsBar(stats = content.stats)
-            }
-
-            HorizontalDivider(
-                color = NetScopeBorder,
-                thickness = 0.5.dp,
-                modifier = Modifier.padding(top = 2.dp),
+                onMethodToggle = { onFilterIntent(TransactionsUiIntent.MethodToggled(method = it)) },
+                onStatusToggle = { onFilterIntent(TransactionsUiIntent.StatusClassToggled(statusClass = it)) },
             )
 
             // List / empty state
-            if (transactions.isEmpty()) {
-                EmptyState(isSearching = content.isFiltering)
-            } else {
-                LazyColumn(
-                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 24.dp),
-                    verticalArrangement = Arrangement.spacedBy(5.dp),
-                ) {
-                    items(transactions, key = { it.id }) { transaction ->
-                        TransactionItem(
-                            transaction = transaction,
-                            onClick = { onIntent(TransactionsUiIntent.TransactionClicked(id = transaction.id)) },
-                            modifier = Modifier.animateItem(),
-                        )
-                    }
-                }
+            when {
+                content.isLoading -> Unit
+                transactions.isEmpty() -> EmptyState(isSearching = content.isFiltering)
+                else -> TransactionList(
+                    transactions = transactions,
+                    stats = content.stats,
+                    showsNewestFirst = filterState.sortOrder == SortOrder.TIME,
+                    listState = listState,
+                    onClick = { id -> onIntent(TransactionsUiIntent.TransactionClicked(id = id)) },
+                    modifier = Modifier.weight(1f),
+                )
             }
         }
+    }
+}
+
+// ── List ──────────────────────────────────────────────────────────────────────
+
+/**
+ * The transactions under their figures. Those are the first item, which anchors the list: at the
+ * top new rows appear below them, further down the rows being read stay in place and a pill counts
+ * the new ones.
+ */
+@Composable
+private fun TransactionList(
+    transactions: List<TransactionSummary>,
+    stats: TransactionStats,
+    showsNewestFirst: Boolean,
+    listState: LazyListState,
+    onClick: (Long) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(modifier = modifier.fillMaxWidth()) {
+        LazyColumn(
+            state = listState,
+            modifier = Modifier
+                .fillMaxSize()
+                .scrollEdgeFade(state = listState, background = NetScopeDarkBackground)
+                .scrollIndicator(state = listState),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(5.dp),
+        ) {
+            item(key = "stats", contentType = "stats") {
+                StatsBar(stats = stats)
+            }
+            items(transactions, key = { it.id }, contentType = { "transaction" }) { transaction ->
+                TransactionItem(
+                    transaction = transaction,
+                    onClick = { onClick(transaction.id) },
+                    modifier = Modifier.animateItem(
+                        fadeInSpec = ROW_FADE_IN,
+                        placementSpec = ROW_PLACEMENT,
+                        fadeOutSpec = null,
+                    ),
+                )
+            }
+        }
+
+        JumpToTop(
+            transactions = transactions,
+            showsNewestFirst = showsNewestFirst,
+            listState = listState,
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(top = 8.dp),
+        )
+    }
+}
+
+/**
+ * The pill back to the top, and what it counts. It is apart from the list because it follows the
+ * scroll position: read there, that would recompose the list as it scrolls.
+ */
+@Composable
+private fun JumpToTop(
+    transactions: List<TransactionSummary>,
+    showsNewestFirst: Boolean,
+    listState: LazyListState,
+    modifier: Modifier = Modifier,
+) {
+    val scope = rememberCoroutineScope()
+    val isAtTop by remember(listState) { derivedStateOf { listState.firstVisibleItemIndex == 0 } }
+    val isFarDown by remember(listState) {
+        derivedStateOf { listState.firstVisibleItemIndex > JUMP_TO_TOP_FROM_INDEX }
+    }
+
+    // Ids only grow, so what is newer than the newest row seen at the top has not been seen
+    var newestSeenId by rememberSaveable { mutableLongStateOf(0L) }
+    LaunchedEffect(isAtTop, transactions) {
+        if (isAtTop) transactions.maxOfOrNull { it.id }?.let { newestSeenId = it }
+    }
+    val newCount = if (showsNewestFirst && !isAtTop) transactions.count { it.id > newestSeenId } else 0
+
+    AnimatedVisibility(
+        visible = newCount > 0 || isFarDown,
+        enter = fadeIn(tween(150)) + slideInVertically(PILL_SLIDE) { -it },
+        exit = fadeOut(tween(120)) + slideOutVertically(PILL_SLIDE) { -it },
+        modifier = modifier,
+    ) {
+        JumpToTopPill(
+            newCount = newCount,
+            onClick = { scope.launch { listState.jumpToTop() } },
+        )
+    }
+}
+
+private suspend fun LazyListState.jumpToTop() {
+    if (firstVisibleItemIndex > JUMP_SNAP_INDEX) scrollToItem(index = JUMP_SNAP_INDEX)
+    animateScrollToItem(index = 0)
+}
+
+@Composable
+private fun JumpToTopPill(newCount: Int, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(20.dp)
+    Row(
+        modifier = Modifier
+            .clip(shape)
+            .background(NetScopeDropdown)
+            .border(0.5.dp, NetScopeAccent.copy(alpha = 0.5f), shape)
+            .clickable(onClickLabel = "Scroll to the top", onClick = onClick)
+            .padding(start = 8.dp, end = 12.dp, top = 5.dp, bottom = 5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Icon(
+            imageVector = Icons.Default.KeyboardArrowUp,
+            contentDescription = null,
+            tint = NetScopeAccent,
+            modifier = Modifier.size(16.dp),
+        )
+        Text(
+            text = if (newCount > 0) "$newCount new" else "Top",
+            color = NetScopeAccent,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold,
+            fontFamily = FontFamily.Monospace,
+        )
     }
 }
 
@@ -326,7 +485,7 @@ private fun StatsBar(stats: TransactionStats) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .padding(bottom = 3.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         StatCard(value = "${stats.totalCount}", label = "REQUESTS", valueColor = NetScopeAccent)
@@ -358,7 +517,7 @@ private fun RowScope.StatCard(value: String, label: String, valueColor: Color) {
         Text(
             text = label,
             color = NetScopeMuted,
-            fontSize = 8.sp,
+            fontSize = 10.sp,
             letterSpacing = 1.sp,
         )
     }
@@ -427,7 +586,7 @@ private fun FilterChip(
             .background(bg)
             .border(0.5.dp, border, RoundedCornerShape(20.dp))
             .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 5.dp),
+            .padding(horizontal = 13.dp, vertical = 7.dp),
         contentAlignment = Alignment.Center,
     ) {
         Text(
@@ -453,7 +612,8 @@ private fun SearchBar(
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
             .background(NetScopeCard)
-            .padding(horizontal = 12.dp, vertical = 9.dp),
+            .height(40.dp) // Fixed: the clear button must not resize the bar when it appears
+            .padding(horizontal = 12.dp),
         contentAlignment = Alignment.CenterStart,
     ) {
         BasicTextField(
@@ -497,7 +657,7 @@ private fun SearchBar(
                     ) {
                         IconButton(
                             onClick = { onQueryChange("") },
-                            modifier = Modifier.size(18.dp),
+                            modifier = Modifier.size(28.dp),
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Close,

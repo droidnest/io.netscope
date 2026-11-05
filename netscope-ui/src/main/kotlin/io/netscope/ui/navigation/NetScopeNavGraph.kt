@@ -136,7 +136,6 @@ internal fun NetScopeNavGraph(
                 MockRulesScreen(
                     uiState    = viewModel.uiState.collectAsStateWithLifecycle().value,
                     onIntent   = viewModel::onIntent,
-                    onBack     = { navController.popBackStack() },
                     onAddRule  = { navController.navigate(ROUTE_MOCK_ADD) },
                     onEditRule = { id -> navController.navigate("mock_rules/edit/$id") },
                 )
@@ -258,7 +257,7 @@ private fun NetScopeBottomBar(
                     label = {
                         Text(
                             text       = item.label,
-                            fontSize   = 9.sp,
+                            fontSize   = 10.sp,
                             fontFamily = FontFamily.SansSerif,
                             fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
                         )

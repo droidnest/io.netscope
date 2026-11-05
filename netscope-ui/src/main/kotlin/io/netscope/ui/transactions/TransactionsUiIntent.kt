@@ -15,4 +15,6 @@ internal sealed interface TransactionsUiIntent : UiIntent {
     data object ClearAllClicked : TransactionsUiIntent
     data class TransactionClicked(val id: Long) : TransactionsUiIntent
     data object NavigationHandled : TransactionsUiIntent
+    data object ExportClicked : TransactionsUiIntent
+    data object ShareHandled : TransactionsUiIntent
 }

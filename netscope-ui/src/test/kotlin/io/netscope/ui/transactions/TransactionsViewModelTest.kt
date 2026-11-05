@@ -3,14 +3,20 @@ package io.netscope.ui.transactions
 import io.netscope.domain.usecase.stats.ComputeTransactionStatsUseCase
 import io.netscope.domain.usecase.transaction.ClearTransactionsUseCase
 import io.netscope.domain.usecase.transaction.FilterTransactionsUseCase
+import io.netscope.domain.usecase.transaction.LoadTransactionsUseCase
 import io.netscope.model.NetTransaction
 import io.netscope.model.SortOrder
+import io.netscope.model.TransactionSummary
 import io.netscope.ui.MainDispatcherRule
 import io.netscope.ui.fake.FakeTransactionRepository
 import io.netscope.ui.fake.aTransaction
+import io.netscope.ui.fake.toSummary
 import io.netscope.ui.mvi.UiIntent
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
@@ -28,9 +34,11 @@ class TransactionsViewModelTest {
     @get:Rule
     val mainDispatcherRule = MainDispatcherRule()
 
-    private val get = aTransaction(id = 1L, method = "GET", path = "/users")
-    private val post = aTransaction(id = 2L, method = "POST", path = "/orders", responseCode = 500)
-    private val repository = FakeTransactionRepository(transactions = listOf(get, post))
+    private val getRow = aTransaction(id = 1L, method = "GET", path = "/users")
+    private val postRow = aTransaction(id = 2L, method = "POST", path = "/orders", responseCode = 500)
+    private val repository = FakeTransactionRepository(transactions = listOf(getRow, postRow))
+    private val get = getRow.toSummary()
+    private val post = postRow.toSummary()
 
     private lateinit var sut: TransactionsViewModel
 
@@ -40,6 +48,7 @@ class TransactionsViewModelTest {
             filterTransactionsUseCase = FilterTransactionsUseCase(repository = repository),
             computeTransactionStatsUseCase = ComputeTransactionStatsUseCase(),
             clearTransactionsUseCase = ClearTransactionsUseCase(repository = repository),
+            loadTransactionsUseCase = LoadTransactionsUseCase(repository = repository),
             defaultDispatcher = mainDispatcherRule.dispatcher,
         )
     }
@@ -69,6 +78,7 @@ class TransactionsViewModelTest {
 
         // When
         sut.onIntent(intent = TransactionsUiIntent.QueryTyped(query = "orders"))
+        advanceUntilIdle()
 
         // Then
         assertEquals(listOf(post), state.content.transactions)
@@ -84,10 +94,11 @@ class TransactionsViewModelTest {
         val added = aTransaction(id = 3L)
 
         // When
-        repository.transactions.value = listOf(get, post, added)
+        repository.transactions.value = listOf(getRow, postRow, added)
+        advanceUntilIdle()
 
         // Then
-        assertEquals(listOf(get, post, added), state.content.transactions)
+        assertEquals(listOf(get, post, added.toSummary()), state.content.transactions)
     }
 
     @Test
@@ -152,9 +163,11 @@ class TransactionsViewModelTest {
         collectState()
         sut.onIntent(intent = TransactionsUiIntent.QueryTyped(query = "orders"))
         sut.onIntent(intent = TransactionsUiIntent.MethodToggled(method = "POST"))
+        advanceUntilIdle()
 
         // When
         sut.onIntent(intent = TransactionsUiIntent.ClearFiltersClicked)
+        advanceUntilIdle()
 
         // Then
         assertFalse(state.content.isFiltering)
@@ -168,9 +181,10 @@ class TransactionsViewModelTest {
 
         // When
         sut.onIntent(intent = TransactionsUiIntent.ClearAllClicked)
+        advanceUntilIdle()
 
         // Then
-        assertEquals(emptyList<NetTransaction>(), state.content.transactions)
+        assertEquals(emptyList<TransactionSummary>(), state.content.transactions)
     }
 
     @Test
@@ -199,5 +213,90 @@ class TransactionsViewModelTest {
 
         // Then
         assertEquals(before, sut.uiState.value)
+    }
+    @Test
+    fun `should show the typed query at once but search only after a pause`() = runTest {
+        // Given
+        collectState()
+
+        // When
+        sut.onIntent(intent = TransactionsUiIntent.QueryTyped(query = "orders"))
+        advanceTimeBy(delayTimeMillis = 100L)
+        runCurrent()
+
+        // Then
+        assertEquals("orders", state.content.query)
+        assertEquals(listOf(get, post), state.content.transactions)
+    }
+
+    @Test
+    fun `should run one search when several characters are typed in a row`() = runTest {
+        // Given
+        collectState()
+
+        // When
+        listOf("o", "or", "ord", "orders").forEach { query ->
+            sut.onIntent(intent = TransactionsUiIntent.QueryTyped(query = query))
+            advanceTimeBy(delayTimeMillis = 100L)
+        }
+        advanceUntilIdle()
+
+        // Then
+        assertEquals(listOf("", "orders"), repository.searchedQueries)
+    }
+
+    @Test
+    fun `should show the first and the latest list when the database changes in a burst`() = runTest {
+        // Given
+        collectState()
+        val lists = mutableListOf<List<TransactionSummary>>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            sut.uiState.collect { lists += it.dataOrNull()!!.content.transactions }
+        }
+        advanceUntilIdle()
+        lists.clear()
+
+        // When
+        repeat(times = 5) { index ->
+            repository.transactions.value = listOf(aTransaction(id = index + 10L))
+            advanceTimeBy(delayTimeMillis = 10L)
+        }
+        advanceUntilIdle()
+
+        // Then
+        assertEquals(listOf(10L, 14L), lists.map { it.single().id })
+    }
+
+    @Test
+    fun `should be loading until the first list arrives`() = runTest {
+        // Given
+        val loading = sut.uiState.value.dataOrNull()!!.content.isLoading
+
+        // When
+        collectState()
+
+        // Then
+        assertTrue(loading)
+        assertFalse(state.content.isLoading)
+    }
+
+    @Test
+    fun `should share a HAR with the listed bodies then go back to content when exporting`() = runTest {
+        // Given
+        repository.transactions.value = listOf(getRow.copy(responseBody = "stored body"), postRow)
+        collectState()
+        sut.onIntent(intent = TransactionsUiIntent.MenuClicked(menu = TransactionsMenu.EXPORT))
+        advanceUntilIdle()
+
+        // When
+        sut.onIntent(intent = TransactionsUiIntent.ExportClicked)
+        advanceUntilIdle()
+        val sharing = state
+        sut.onIntent(intent = TransactionsUiIntent.ShareHandled)
+
+        // Then
+        assertTrue((sharing as TransactionsUiState.SharingHar).har.contains("stored body"))
+        assertNull(sharing.content.openMenu)
+        assertTrue(state is TransactionsUiState.Content)
     }
 }
