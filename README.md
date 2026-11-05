@@ -35,7 +35,7 @@
 **`libs.versions.toml`**
 ```toml
 [versions]
-netscope = "0.7.1"
+netscope = "0.7.2"
 
 [libraries]
 netscope-core         = { group = "io.github.droidnest", name = "netscope-core",         version.ref = "netscope" }
@@ -230,6 +230,9 @@ never see the ViewModel, and navigation and open dialogs are part of the state.
 ---
 
 ## Changelog
+
+### v0.7.2
+- **Inspector opens in every app** — `netscope-ui` declares `NetScopeActivity` in its own manifest, so a shake or a notification tap no longer crashes with `ActivityNotFoundException`. Apps that declared the activity themselves can remove that entry
 
 ### v0.7.1
 - **Kotlin 2.0 apps** — the modules are compiled for Kotlin 2.0 and depend on `kotlin-stdlib` 2.0.21, so an app on Kotlin 2.0 or newer builds against them. 0.7.0 required Kotlin 2.2
