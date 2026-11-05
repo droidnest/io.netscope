@@ -6,6 +6,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.7.3] — 2026-11-05
+
+### Fixed
+- `netscope-ui` no longer calls `FlowRow`, so apps on Compose foundation 1.8+ no longer crash on the Settings
+  and mock rule editor screens
+
+---
+
 ## [0.7.2] — 2026-11-05
 
 ### Fixed
