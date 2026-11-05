@@ -12,8 +12,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.Spacer
@@ -74,6 +72,7 @@ import io.netscope.ui.component.NetScopeMuted
 import io.netscope.ui.component.NetScopeOnSurface
 import io.netscope.ui.component.NetScopeSurface
 import io.netscope.ui.component.ScreenTitle
+import io.netscope.ui.component.WrapRow
 import io.netscope.NotificationStyle
 import io.netscope.model.SettingChange
 import io.netscope.ui.mvi.UiIntent
@@ -474,16 +473,15 @@ private fun NotificationStylePicker(selected: NotificationStyle, onSelect: (Noti
 
 // ── Generic chip row ──────────────────────────────────────────────────────────
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun <T> OptionChips(
     options: List<Pair<T, String>>,
     selected: T,
     onSelect: (T) -> Unit,
 ) {
-    FlowRow(
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalArrangement   = Arrangement.spacedBy(6.dp),
+    WrapRow(
+        horizontalSpacing = 6.dp,
+        verticalSpacing = 6.dp,
     ) {
         options.forEach { (value, label) ->
             val active = value == selected
@@ -514,7 +512,6 @@ private fun <T> OptionChips(
 
 // ── Redacted headers editor ───────────────────────────────────────────────────
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun RedactedHeadersEditor(
     headers: Set<String>,
@@ -527,9 +524,9 @@ private fun RedactedHeadersEditor(
     onConfirmAdd: () -> Unit,
     onRemove: (String) -> Unit,
 ) {
-    FlowRow(
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalArrangement   = Arrangement.spacedBy(6.dp),
+    WrapRow(
+        horizontalSpacing = 6.dp,
+        verticalSpacing = 6.dp,
     ) {
         headers.sorted().forEach { header ->
             Row(
