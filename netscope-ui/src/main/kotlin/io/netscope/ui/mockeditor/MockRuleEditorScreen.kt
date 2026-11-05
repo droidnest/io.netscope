@@ -6,8 +6,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -64,6 +62,7 @@ import io.netscope.ui.component.NetScopeDarkBackground
 import io.netscope.ui.component.NetScopeMuted
 import io.netscope.ui.component.NetScopeOnSurface
 import io.netscope.ui.component.NetScopeSurface
+import io.netscope.ui.component.WrapRow
 import io.netscope.ui.component.methodColor
 import io.netscope.ui.component.statusColor
 import io.netscope.ui.mvi.UiIntent
@@ -448,7 +447,6 @@ private fun EditorTextField(
     )
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun <T> SegmentedPicker(
     options: List<T>,
@@ -457,9 +455,9 @@ private fun <T> SegmentedPicker(
     label: (T) -> String,
     chipColor: (T) -> Color,
 ) {
-    FlowRow(
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+    WrapRow(
+        horizontalSpacing = 6.dp,
+        verticalSpacing = 6.dp,
     ) {
         options.forEach { option ->
             val isSelected = option == selected
