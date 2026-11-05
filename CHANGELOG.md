@@ -12,6 +12,9 @@ Planned work is in the [README roadmap](README.md#roadmap).
 
 ### Added
 - `NetScope.notificationStyleFlow`, `TransactionRepository.observeSummary` and `Settings.lockedRedactedHeaders`
+- `TransactionRepository.observeSummaries` and `getByIds`, `TransactionSummary` and `LoadTransactionsUseCase`
+- Scrolling in the request list: a thin position indicator, and a pill to go back to the top that counts the
+  requests that arrived while you were reading further down. The figures scroll away with the list
 - `netscope-no-op` mirrors `NetScope.repository`, `settingsRepository`, `mockRuleRepository` and `mockRules`,
   with the types they use. Using them in release code needs `kotlinx-coroutines` in the app
 
@@ -22,6 +25,18 @@ Planned work is in the [README roadmap](README.md#roadmap).
 - A database with no migration path is rebuilt again, as before 0.7.0; its captured traffic is lost
 - p50 and p95 use the nearest rank, one position lower than before
 - The notification stops reading transaction bodies
+- The list and the Stats screen read no body or header: a change re-reads small rows instead of every stored
+  body, and the list updates at most four times a second. `FilterTransactionsUseCase` now emits
+  `TransactionSummary`, and `ComputeTransactionStatsUseCase` and `TransactionStats.slowestRequests` use it too
+- Search runs in SQLite 250 ms after the last keystroke. Outside the headers it ignores the case of ASCII
+  letters only, and a query is cut at 1,000 characters
+- Request and response bodies wrap instead of scrolling sideways, one lazily drawn line at a time. XML shows
+  each tag on its own line
+- `TransactionItem` takes a `TransactionSummary`
+- Each theme has its own status, method and syntax colours, all at WCAG AA contrast, so `ColorSuccess` and the
+  other colour tokens, `StatusClass.color()`, `methodColor()` and `statusColor()` are now `@Composable`
+- Text is at least 10 sp, tab titles share one style, and the Mock and Settings tabs lose their back arrow
+- Database version 4 indexes `requestDate`; the migration keeps the stored traffic
 
 ### Fixed
 - `NetScopeActivity` is declared by `netscope-ui`, so apps no longer have to add it to their manifest. The
@@ -38,6 +53,14 @@ Planned work is in the [README roadmap](README.md#roadmap).
 - `NetScopeActivity` no longer crashes when Android recreates it in a new process. Until the app configures
   NetScope, it shows the saved settings over the defaults
 - A second tap on Save in the mock rule editor no longer adds a duplicate rule
+- Opening a large response no longer freezes the app: it was formatted on the main thread, which caused an
+  ANR with a 240 KB JSON body. Formatting also no longer crashes on a body cut in the middle of an escape
+- A response can no longer hang or crash the app through the body viewer: a stray `/` in an XML tag looped
+  forever, and deeply nested JSON ran out of memory
+- Exporting the list as HAR no longer blocks the main thread
+- The request list no longer flashes "No requests yet" while it loads
+- Primary tabs no longer leave a blank band above the bottom bar
+- The "copied" snackbar was white on white in the light theme
 - The Stats response-time percentages add up to 100%
 - `toCurl` escapes single quotes in the URL and headers, so an exported command cannot break or run a value
 - A mock rule with an invalid Content-Type is no longer saved, and one already saved no longer crashes the

@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -30,23 +31,21 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.netscope.model.NetTransaction
+import io.netscope.model.TransactionSummary
 import io.netscope.model.TransactionStats
 import io.netscope.ui.component.ColorAmber
+import io.netscope.ui.component.ColorCyan
 import io.netscope.ui.component.ColorError
 import io.netscope.ui.component.ColorPink
 import io.netscope.ui.component.ColorPurple
@@ -59,6 +58,7 @@ import io.netscope.ui.component.NetScopeDarkBackground
 import io.netscope.ui.component.NetScopeMuted
 import io.netscope.ui.component.NetScopeOnSurface
 import io.netscope.ui.component.NetScopeSurface
+import io.netscope.ui.component.ScreenTitle
 import io.netscope.ui.component.NetScopeText2
 import io.netscope.ui.component.color
 import io.netscope.ui.component.formatBytes
@@ -73,9 +73,10 @@ import kotlin.math.roundToInt
 
 private data class DurationBucketUi(val label: String, val count: Int, val color: Color)
 
+@Composable
 private fun TransactionStats.DurationBucket.toUi(count: Int) = when (this) {
     TransactionStats.DurationBucket.FAST      -> DurationBucketUi(label = "< 100ms", count = count, color = ColorSuccess)
-    TransactionStats.DurationBucket.MEDIUM    -> DurationBucketUi(label = "100–300ms", count = count, color = ColorSuccess.copy(alpha = 0.7f))
+    TransactionStats.DurationBucket.MEDIUM    -> DurationBucketUi(label = "100–300ms", count = count, color = ColorCyan)
     TransactionStats.DurationBucket.SLOW      -> DurationBucketUi(label = "300ms–1s", count = count, color = ColorAmber)
     TransactionStats.DurationBucket.VERY_SLOW -> DurationBucketUi(label = "> 1s", count = count, color = ColorError)
 }
@@ -104,20 +105,11 @@ internal fun StatsScreen(
     val onSurface = NetScopeOnSurface
 
     Scaffold(
+        // The bottom bar of the graph already keeps clear of the navigation bar
+        contentWindowInsets = WindowInsets(0),
         topBar = {
             TopAppBar(
-                title = {
-                    Text(
-                        text = buildAnnotatedString {
-                            withStyle(SpanStyle(color = accent))    { append("Net") }
-                            withStyle(SpanStyle(color = onSurface)) { append("Scope") }
-                            withStyle(SpanStyle(color = accent, fontSize = 13.sp)) { append("  Analytics") }
-                        },
-                        fontWeight = FontWeight.Bold,
-                        fontSize   = 17.sp,
-                        fontFamily = FontFamily.Monospace,
-                    )
-                },
+                title = { ScreenTitle(text = "Stats") },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = NetScopeSurface),
             )
         },
@@ -310,7 +302,7 @@ private fun SummaryCard(
         Text(
             text          = label,
             color         = NetScopeMuted,
-            fontSize      = 7.sp,
+            fontSize      = 10.sp,
             letterSpacing = 0.8.sp,
             fontFamily    = FontFamily.SansSerif,
         )
@@ -490,7 +482,7 @@ private fun MethodRow(method: String, count: Int, maxCount: Int, total: Int) {
             Text(
                 text       = method,
                 color      = color,
-                fontSize   = 9.sp,
+                fontSize   = 10.sp,
                 fontWeight = FontWeight.Bold,
                 fontFamily = FontFamily.Monospace,
             )
@@ -588,7 +580,7 @@ private fun BucketRow(bucket: DurationBucketUi, maxCount: Int, total: Int) {
 // ── Slowest request row ───────────────────────────────────────────────────────
 
 @Composable
-private fun SlowestRow(rank: Int, tx: NetTransaction, onClick: () -> Unit) {
+private fun SlowestRow(rank: Int, tx: TransactionSummary, onClick: () -> Unit) {
     val durationColor = when {
         (tx.durationMs ?: 0L) <= 300L  -> ColorSuccess
         (tx.durationMs ?: 0L) <= 1000L -> ColorAmber
@@ -620,7 +612,7 @@ private fun SlowestRow(rank: Int, tx: NetTransaction, onClick: () -> Unit) {
             Text(
                 text       = tx.method,
                 color      = tx.method.methodColor(),
-                fontSize   = 8.sp,
+                fontSize   = 10.sp,
                 fontWeight = FontWeight.Bold,
                 fontFamily = FontFamily.Monospace,
             )

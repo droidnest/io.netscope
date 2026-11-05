@@ -42,18 +42,25 @@ data class NetTransaction(
     val url: String get() = "$scheme://$host$path${if (query != null) "?$query" else ""}"
 
     val statusClass: StatusClass
-        get() = when {
-            error != null -> StatusClass.ERROR
-            responseCode == null -> StatusClass.PENDING
-            responseCode < 300 -> StatusClass.SUCCESS
-            responseCode < 400 -> StatusClass.REDIRECT
-            responseCode < 500 -> StatusClass.CLIENT_ERROR
-            else -> StatusClass.SERVER_ERROR
-        }
+        get() = StatusClass.of(error = error, responseCode = responseCode)
 
     val totalSize: Long get() = requestBodySize + responseBodySize
 
-    enum class StatusClass { PENDING, SUCCESS, REDIRECT, CLIENT_ERROR, SERVER_ERROR, ERROR }
+    enum class StatusClass {
+        PENDING, SUCCESS, REDIRECT, CLIENT_ERROR, SERVER_ERROR, ERROR;
+
+        companion object {
+            /** The class of a transaction that failed with [error] or got [responseCode]. */
+            fun of(error: String?, responseCode: Int?): StatusClass = when {
+                error != null -> ERROR
+                responseCode == null -> PENDING
+                responseCode < 300 -> SUCCESS
+                responseCode < 400 -> REDIRECT
+                responseCode < 500 -> CLIENT_ERROR
+                else -> SERVER_ERROR
+            }
+        }
+    }
 }
 
 data class NetHeader(
