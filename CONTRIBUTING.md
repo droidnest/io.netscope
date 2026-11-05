@@ -39,8 +39,12 @@ git tag -a v0.7.0 -m "v0.7.0"
 git push origin main --tags
 ```
 
-Pushing a `vX.Y.Z` tag runs `.github/workflows/publish.yml`, which publishes to Maven Central. That workflow is
-disabled at the moment, so a tag publishes nothing until it is enabled again.
+Pushing a `vX.Y.Z` tag runs `.github/workflows/publish.yml`, which uploads the modules to the Central Portal. The
+deployment is then released from https://central.sonatype.com/publishing/deployments.
+
+The published modules are compiled for Kotlin 2.0 (`languageVersion`, `apiVersion` and `coreLibrariesVersion` in
+the root `build.gradle.kts`), whatever Kotlin version AGP builds with, so apps on Kotlin 2.0 can read them. Raising
+that target drops those apps, and belongs in a minor release with a line in the README requirements.
 
 ## Architecture
 
