@@ -6,6 +6,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.7.2] — 2026-11-05
+
+### Fixed
+- `netscope-ui` declares `NetScopeActivity`, so apps no longer crash when they open the inspector. An
+  `<activity>` entry an app added for it can be removed
+
+---
+
 ## [0.7.1] — 2026-11-05
 
 ### Fixed
