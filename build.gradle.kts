@@ -1,3 +1,4 @@
+import com.vanniktech.maven.publish.AndroidSingleVariantLibrary
 import com.vanniktech.maven.publish.MavenPublishBaseExtension
 import com.vanniktech.maven.publish.SonatypeHost
 
@@ -24,8 +25,18 @@ subprojects {
     // ── Maven publishing ──────────────────────────────────────────────────────
     plugins.withId("com.vanniktech.maven.publish") {
         val artifactId = project.name
+        val emptyJavadocJar = tasks.register<Jar>("emptyJavadocJar") {
+            archiveClassifier.set("javadoc")
+        }
+        extensions.configure<PublishingExtension> {
+            publications.withType<MavenPublication>().configureEach { artifact(emptyJavadocJar) }
+        }
         extensions.configure<MavenPublishBaseExtension> {
             publishToMavenCentral(SonatypeHost.CENTRAL_PORTAL)
+            // AGP's Dokka cannot read sealed classes (PermittedSubclasses requires
+            // ASM9), so skip it and attach an empty javadoc jar, which Maven
+            // Central still requires.
+            configure(AndroidSingleVariantLibrary(variant = "release", sourcesJar = true, publishJavadocJar = false))
             // Signing is wired explicitly in afterEvaluate below — do NOT call
             // signAllPublications() here; it silently skips useInMemoryPgpKeys()
             // when the property is null yet still registers sign tasks, causing
