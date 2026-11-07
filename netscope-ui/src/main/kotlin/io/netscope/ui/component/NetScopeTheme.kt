@@ -8,6 +8,16 @@ import io.netscope.model.NetTransaction
 
 // ── Color token data class ─────────────────────────────────────────────────────
 
+/** Code colours of a body: one set per theme, since pastels that read on a dark block vanish on a light one. */
+data class SyntaxColors(
+    val key: Color,
+    val string: Color,
+    val number: Color,
+    val keyword: Color,
+    val punctuation: Color,
+    val plain: Color,
+)
+
 data class NetScopeColors(
     val background: Color,  // Bg — #0B0F1A
     val surface: Color,     // Surface1 — TopAppBar
@@ -21,8 +31,9 @@ data class NetScopeColors(
     val text2: Color,       // Text2 — secondary, labels, KV keys
     val onSurface: Color,   // Text1 — primary text
     val onCode: Color,      // Monospace path / code text
-    val code: Color,        // Code block background (= Surface4)
+    val code: Color,        // Code block background: request and response bodies
     val dropdown: Color,    // DropdownMenu container
+    val syntax: SyntaxColors,
     val isDark: Boolean,
 )
 
@@ -43,6 +54,14 @@ val DarkNetScopeColors = NetScopeColors(
     onCode     = Color(0xFFC8D4EE),
     code       = Color(0xFF0D1525),
     dropdown   = Color(0xFF162032),
+    syntax     = SyntaxColors(
+        key         = Color(0xFF7DD3FC),
+        string      = Color(0xFF86EFAC),
+        number      = Color(0xFFFBBF24),
+        keyword     = Color(0xFFA78BFA),
+        punctuation = Color(0xFF6B7FA3),
+        plain       = Color(0xFFCDD6F4),
+    ),
     isDark     = true,
 )
 
@@ -56,13 +75,22 @@ val LightNetScopeColors = NetScopeColors(
     surface3   = Color(0xFFE6EBF4),
     border     = Color(0xFFDDE3EE),
     border2    = Color(0xFFCDD5E0),
-    accent     = Color(0xFF0098C8),
-    muted      = Color(0xFF8897AE),
-    text2      = Color(0xFF6B7A8D),
+    accent     = Color(0xFF00739A),
+    muted      = Color(0xFF5C6B82),
+    text2      = Color(0xFF4A586C),
     onSurface  = Color(0xFF0D1B2E),
     onCode     = Color(0xFF1D3557),
-    code       = Color(0xFFEEF2F7),
+    // White, not cardAlt: a body on a grey block sat on the grey page with no edge
+    code       = Color(0xFFFFFFFF),
     dropdown   = Color(0xFFFFFFFF),
+    syntax     = SyntaxColors(
+        key         = Color(0xFF0550AE),
+        string      = Color(0xFF116329),
+        number      = Color(0xFF953800),
+        keyword     = Color(0xFF8250DF),
+        punctuation = Color(0xFF424A53),
+        plain       = Color(0xFF1F2328),
+    ),
     isDark     = false,
 )
 
@@ -99,6 +127,7 @@ val NetScopeOnSurface: Color       @Composable get() = LocalNetScopeColors.curre
 val NetScopeOnCode: Color          @Composable get() = LocalNetScopeColors.current.onCode
 val NetScopeCode: Color            @Composable get() = LocalNetScopeColors.current.code
 val NetScopeDropdown: Color        @Composable get() = LocalNetScopeColors.current.dropdown
+val NetScopeSyntax: SyntaxColors   @Composable get() = LocalNetScopeColors.current.syntax
 
 // ── Semantic colors (same across themes) ──────────────────────────────────────
 
