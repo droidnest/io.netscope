@@ -6,6 +6,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.7.4] — 2026-11-07
+
+### Fixed
+- Request and response bodies are readable in the light theme: they sit on a white block with their own
+  light syntax colours, and the light accent and secondary text colours reach WCAG AA contrast
+
+---
+
 ## [0.7.3] — 2026-11-05
 
 ### Fixed
