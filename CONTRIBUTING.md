@@ -29,18 +29,25 @@ Requires: JDK 17, Android Studio Hedgehog or later.
 
 ## Releasing (maintainers only)
 
-```bash
-# 1. Bump VERSION_NAME in gradle.properties
-# 2. Update CHANGELOG.md
-# 3. Commit and tag
+1. On `develop`, bump `VERSION_NAME` in `gradle.properties` and add the release to `CHANGELOG.md` and the README
+2. Merge `develop` into `main` and push
 
-git commit -am "chore(release): release v0.7.0"
-git tag -a v0.7.0 -m "v0.7.0"
-git push origin main --tags
+```bash
+git commit -m "chore(release): set the version to 0.8.0"
+git checkout main && git merge develop && git push origin main
 ```
 
-Pushing a `vX.Y.Z` tag runs `.github/workflows/publish.yml`, which uploads the modules to the Central Portal. The
-deployment is then released from https://central.sonatype.com/publishing/deployments.
+A push to `main` runs `.github/workflows/publish.yml`. When `vX.Y.Z` for the current `VERSION_NAME` does not
+exist yet, it runs the unit tests, publishes every module and releases the deployment on the Central Portal, then
+pushes the `vX.Y.Z` tag. Nothing has to be clicked on https://central.sonatype.com. A push whose version is
+already tagged publishes nothing, so merging without a bump is safe. The artifacts reach Maven Central search a
+few minutes after the run.
+
+A hotfix from a `release/X.Y.x` branch is released by pushing its tag, which has to match `VERSION_NAME`:
+
+```bash
+git tag -a v0.7.5 -m "v0.7.5" && git push origin v0.7.5
+```
 
 The published modules are compiled for Kotlin 2.0 (`languageVersion`, `apiVersion` and `coreLibrariesVersion` in
 the root `build.gradle.kts`), whatever Kotlin version AGP builds with, so apps on Kotlin 2.0 can read them. Raising
