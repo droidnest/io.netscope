@@ -35,7 +35,7 @@
 **`libs.versions.toml`**
 ```toml
 [versions]
-netscope = "0.7.3"
+netscope = "0.7.4"
 
 [libraries]
 netscope-core         = { group = "io.github.droidnest", name = "netscope-core",         version.ref = "netscope" }
@@ -230,6 +230,9 @@ never see the ViewModel, and navigation and open dialogs are part of the state.
 ---
 
 ## Changelog
+
+### v0.7.4
+- **Readable light mode** — request and response bodies sit on a white block with syntax colours made for light surfaces, instead of the dark theme's pastels on grey, and secondary text and the accent reach WCAG AA contrast
 
 ### v0.7.3
 - **Compose 1.8+ apps** — `netscope-ui` no longer calls the experimental `FlowRow`, whose signature changed in Compose foundation 1.8, so Settings and the mock rule editor no longer crash with `NoSuchMethodError`. Tested on Compose 1.7, 1.8 and 1.12
