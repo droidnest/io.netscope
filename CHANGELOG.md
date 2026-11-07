@@ -70,6 +70,14 @@ Planned work is in the [README roadmap](README.md#roadmap).
 
 ---
 
+## [0.7.5] - 2026-11-07
+
+### Changed
+- No change to the library. The publish workflow now releases the deployment on Maven Central by itself, and
+  this is the first release it does so for
+
+---
+
 ## [0.7.4] - 2026-11-07
 
 ### Fixed
