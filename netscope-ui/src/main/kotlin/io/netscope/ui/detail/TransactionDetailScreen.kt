@@ -90,6 +90,7 @@ import io.netscope.ui.component.ColorPink
 import io.netscope.ui.component.ColorPurple
 import io.netscope.ui.component.ColorSuccess
 import io.netscope.ui.component.NetScopeCardAlt
+import io.netscope.ui.component.NetScopeCode
 import io.netscope.ui.component.NetScopeSurface
 import io.netscope.ui.component.NetScopeSyntax
 import io.netscope.ui.component.NetScopeText2
@@ -966,7 +967,7 @@ private fun BodyTitle(onCopy: () -> Unit) {
             .padding(horizontal = 12.dp)
             .fillMaxWidth()
             .background(
-                color = NetScopeCardAlt,
+                color = NetScopeCode,
                 shape = RoundedCornerShape(topStart = BodyEdgeRadius, topEnd = BodyEdgeRadius),
             )
             .padding(start = 12.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
@@ -997,7 +998,7 @@ private fun BodyLine(line: String, kind: BodyKind, isLast: Boolean) {
             .padding(horizontal = 12.dp)
             .fillMaxWidth()
             .background(
-                color = NetScopeCardAlt,
+                color = NetScopeCode,
                 shape = RoundedCornerShape(
                     bottomStart = if (isLast) BodyEdgeRadius else 0.dp,
                     bottomEnd = if (isLast) BodyEdgeRadius else 0.dp,

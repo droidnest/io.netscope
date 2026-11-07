@@ -39,7 +39,7 @@ data class NetScopeColors(
     val text2: Color,       // Text2 — secondary, labels, KV keys
     val onSurface: Color,   // Text1 — primary text
     val onCode: Color,      // Monospace path / code text
-    val code: Color,        // Code block background (= Surface4)
+    val code: Color,        // Code block background: request and response bodies
     val dropdown: Color,    // DropdownMenu container
     val onAccent: Color,    // Content of a filled accent surface
     val success: Color,     // 2xx, fast requests
@@ -104,7 +104,8 @@ val LightNetScopeColors = NetScopeColors(
     text2      = Color(0xFF4A586C),
     onSurface  = Color(0xFF0D1B2E),
     onCode     = Color(0xFF1D3557),
-    code       = Color(0xFFEEF2F7),
+    // White, not cardAlt: a body on a grey block sat on the grey page with no edge
+    code       = Color(0xFFFFFFFF),
     dropdown   = Color(0xFFFFFFFF),
     onAccent   = Color(0xFFFFFFFF),
     success    = Color(0xFF00704A),
@@ -115,12 +116,12 @@ val LightNetScopeColors = NetScopeColors(
     pink       = Color(0xFFA63277),
     cyan       = Color(0xFF006F8C),
     syntax     = SyntaxColors(
-        key         = Color(0xFF0B5F99),
-        string      = Color(0xFF0B6B3F),
-        number      = Color(0xFF8F4A00),
-        keyword     = Color(0xFF6440C4),
-        punctuation = Color(0xFF5C6B82),
-        plain       = Color(0xFF1D3557),
+        key         = Color(0xFF0550AE),
+        string      = Color(0xFF116329),
+        number      = Color(0xFF953800),
+        keyword     = Color(0xFF8250DF),
+        punctuation = Color(0xFF424A53),
+        plain       = Color(0xFF1F2328),
     ),
     isDark     = false,
 )
