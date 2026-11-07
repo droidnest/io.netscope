@@ -51,7 +51,7 @@ class NetScopeColorsTest {
     fun `should keep every syntax colour readable on the code surface`() {
         themes.forEach { colors ->
             with(colors.syntax) { listOf(key, string, number, keyword, punctuation, plain) }.forEach { color ->
-                assertReadable(name = "Syntax, dark=${colors.isDark}", text = color, background = colors.cardAlt)
+                assertReadable(name = "Syntax, dark=${colors.isDark}", text = color, background = colors.code)
             }
         }
     }
