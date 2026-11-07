@@ -35,7 +35,7 @@
 **`libs.versions.toml`**
 ```toml
 [versions]
-netscope = "0.7.4"
+netscope = "0.7.5"
 
 [libraries]
 netscope-core         = { group = "io.github.droidnest", name = "netscope-core",         version.ref = "netscope" }
@@ -232,6 +232,9 @@ never see the ViewModel, and navigation and open dialogs are part of the state.
 ---
 
 ## Changelog
+
+### v0.7.5
+- **Automatic releases** — no change to the library: this release is the first one the publish workflow releases on Maven Central by itself, with no manual step on the Central Portal
 
 ### v0.7.4
 - **Readable light mode** — request and response bodies sit on a white block with syntax colours made for light surfaces, instead of the dark theme's pastels on grey, and secondary text and the accent reach WCAG AA contrast
