@@ -1,36 +1,105 @@
 name: Publish to Maven Central
 
+# A merge into main publishes the version in gradle.properties when it has no vX.Y.Z tag yet, then tags it.
+# A vX.Y.Z tag pushed by hand (a hotfix from a release branch) publishes that tag. Either way the deployment
+# is released on the Central Portal by the build itself: there is nothing to click afterwards.
 on:
   push:
+    branches:
+      - main
     tags:
       - 'v[0-9]+.[0-9]+.[0-9]+'
+  workflow_dispatch:
+
+# Two runs must never upload the same version at once
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
+permissions:
+  contents: write
 
 jobs:
-  publish:
-    name: Publish all modules
+  version:
+    name: Resolve the version
     runs-on: ubuntu-latest
-
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+      publish: ${{ steps.resolve.outputs.publish }}
+      tag: ${{ steps.resolve.outputs.tag }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Read VERSION_NAME and decide
+        id: resolve
+        run: |
+          version=$(grep -E '^VERSION_NAME=' gradle.properties | cut -d= -f2 | tr -d '[:space:]')
+          tag="v$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::VERSION_NAME '$version' is not X.Y.Z"
+            exit 1
+          fi
+
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            if [[ "$GITHUB_REF_NAME" != "$tag" ]]; then
+              echo "::error::Tag $GITHUB_REF_NAME does not match VERSION_NAME $version"
+              exit 1
+            fi
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          elif git ls-remote --exit-code --tags origin "refs/tags/$tag" > /dev/null; then
+            echo "::notice::$tag already exists, so $version is already published. Bump VERSION_NAME to release."
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::Publishing $version"
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  test:
+    name: Run unit tests
+    needs: version
+    if: needs.version.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           java-version: '17'
           distribution: 'temurin'
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v5
+
+      - name: Unit tests
+        run: ./gradlew testDebugUnitTest --no-daemon --stacktrace
+
+  publish:
+    name: Publish and release all modules
+    needs: [version, test]
+    if: needs.version.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
         with:
-          cache-read-only: false
+          java-version: '17'
+          distribution: 'temurin'
 
-      - name: Make gradlew executable
-        run: chmod +x gradlew
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v5
 
-      # Import key into the runner's gpg keyring.
-      # The action handles passphrase, trust, and gpg-agent setup automatically.
-      # Its output `keyid` is the fingerprint we pass to Gradle as signing.gnupg.keyName.
+      # Its output `fingerprint` is passed to Gradle as signing.gnupg.keyName
       - name: Import GPG key
         id: import_gpg
         uses: crazy-max/ghaction-import-gpg@v6
@@ -38,12 +107,12 @@ jobs:
           gpg_private_key: ${{ secrets.SIGNING_KEY }}
           passphrase: ${{ secrets.SIGNING_PASSWORD }}
 
-      - name: Show imported key
-        run: gpg --list-secret-keys --keyid-format LONG
-
-      - name: Publish to Maven Central
+      # publishAndReleaseToMavenCentral uploads the deployment as AUTOMATIC: the portal releases it once it
+      # validates, and the build fails if validation does. No configuration cache: the plugin cannot
+      # publish a release with it.
+      - name: Publish and release to Maven Central
         run: >
-          ./gradlew publishAllPublicationsToMavenCentralRepository
+          ./gradlew publishAndReleaseToMavenCentral
           --no-configuration-cache
           --no-daemon
           --stacktrace
@@ -53,3 +122,14 @@ jobs:
           CI: "true"
           ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
           ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+
+      # A tag pushed with GITHUB_TOKEN does not start another run of this workflow
+      - name: Tag the release
+        if: github.ref_type == 'branch'
+        env:
+          TAG: ${{ needs.version.outputs.tag }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" -m "$TAG"
+          git push origin "$TAG"
