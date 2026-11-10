@@ -5,7 +5,7 @@ import android.content.Context
 /** No-op stub — replace with the `netscope-core` artifact in debug builds. */
 class NetScopeShakeDetector(
     context: Context,
-    threshold: Float = 12f,
+    threshold: Float = 13f,
     onShake: () -> Unit,
 ) {
     fun start() = Unit

@@ -19,6 +19,8 @@ Planned work is in the [README roadmap](README.md#roadmap).
   with the types they use. Using them in release code needs `kotlinx-coroutines` in the app
 
 ### Changed
+- Shake-to-open needs three jolts within one second, at a default threshold of 13 m/s² instead of 12, so a
+  single bump, putting the phone down or walking no longer opens NetScope
 - Response bodies are captured as the app reads them, so `intercept` no longer waits for the body. A body
   the app does not read stays empty, and `responseBodySize` is now the size the app read, in bytes
 - Stored bodies are limited to 800 KB of UTF-8, whatever the body size limit is

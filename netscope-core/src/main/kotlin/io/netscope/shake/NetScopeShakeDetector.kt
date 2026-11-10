@@ -24,14 +24,15 @@ import io.netscope.NetScope
  * ```
  *
  * @param context   Any context; only used to obtain [SensorManager].
- * @param threshold Acceleration threshold in m/s² above which a shake is detected
- *                  (default `12f` ≈ 1.2 g, comfortable for deliberate shakes).
+ * @param threshold Acceleration in m/s², on top of gravity, that a jolt must pass to count
+ *                  (default `13f`). A shake is [SHAKE_PEAKS] such jolts within [SHAKE_WINDOW_MS],
+ *                  so a single bump, putting the phone down or walking does not open NetScope.
  * @param onShake   Callback invoked on the sensor-listener thread when a shake
  *                  is detected.  Dispatch to the main thread if you need UI work.
  */
 class NetScopeShakeDetector(
     context: Context,
-    private val threshold: Float = 12f,
+    private val threshold: Float = 13f,
     private val onShake: () -> Unit,
 ) {
     private val sensorManager =
@@ -40,13 +41,12 @@ class NetScopeShakeDetector(
     private val accelerometer: Sensor? =
         sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
 
-    // Pre-computed: avoids sqrt() on the 100Hz sensor hot-path.
-    // Original condition: sqrt(|a|) - GRAVITY_EARTH > threshold
-    // Equivalent:         |a|² > (GRAVITY_EARTH + threshold)²
+    // Compares squares, so the sensor hot path needs no sqrt():
+    // |a| - GRAVITY_EARTH > threshold  ⇔  |a|² > (GRAVITY_EARTH + threshold)²
     private val magnitudeThresholdSquared =
         (SensorManager.GRAVITY_EARTH + threshold) * (SensorManager.GRAVITY_EARTH + threshold)
 
-    private var lastShakeTime = 0L
+    private val peaks = ShakePeaks()
 
     private val listener = object : SensorEventListener {
         override fun onSensorChanged(event: SensorEvent) {
@@ -55,12 +55,8 @@ class NetScopeShakeDetector(
             val z = event.values[2]
 
             val magnitudeSquared = x * x + y * y + z * z
-            if (magnitudeSquared > magnitudeThresholdSquared) {
-                val now = System.currentTimeMillis()
-                if (now - lastShakeTime > COOLDOWN_MS) {
-                    lastShakeTime = now
-                    onShake()
-                }
+            if (magnitudeSquared > magnitudeThresholdSquared && peaks.isShake(nowMs = event.timestamp / NANOS_PER_MS)) {
+                onShake()
             }
         }
 
@@ -85,9 +81,41 @@ class NetScopeShakeDetector(
      */
     fun stop() {
         sensorManager.unregisterListener(listener)
+        peaks.reset()
     }
 
     private companion object {
-        const val COOLDOWN_MS = 1_000L
+        const val NANOS_PER_MS = 1_000_000L
+    }
+}
+
+internal const val SHAKE_PEAKS = 3
+internal const val SHAKE_WINDOW_MS = 1_000L
+internal const val PEAK_GAP_MS = 120L
+internal const val SHAKE_COOLDOWN_MS = 1_500L
+
+/**
+ * Counts the jolts over the threshold and tells when they make a shake. Readings closer than
+ * [PEAK_GAP_MS] belong to the same jolt, which lasts several samples, so they count once.
+ */
+internal class ShakePeaks {
+    private val times = ArrayDeque<Long>()
+    private var lastShakeMs = Long.MIN_VALUE / 2
+
+    /** Records a reading over the threshold at [nowMs], and returns whether it completes a shake. */
+    fun isShake(nowMs: Long): Boolean {
+        if (nowMs - lastShakeMs < SHAKE_COOLDOWN_MS) return false
+        val last = times.lastOrNull()
+        if (last != null && nowMs - last < PEAK_GAP_MS) return false
+        times.addLast(nowMs)
+        while (nowMs - times.first() > SHAKE_WINDOW_MS) times.removeFirst()
+        if (times.size < SHAKE_PEAKS) return false
+        times.clear()
+        lastShakeMs = nowMs
+        return true
+    }
+
+    fun reset() {
+        times.clear()
     }
 }
