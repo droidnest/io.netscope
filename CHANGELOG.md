@@ -10,6 +10,10 @@ Planned work is in the [README roadmap](README.md#roadmap).
 
 ## [Unreleased]
 
+---
+
+## [0.8.0] - 2026-11-10
+
 ### Added
 - `NetScope.notificationStyleFlow`, `TransactionRepository.observeSummary` and `Settings.lockedRedactedHeaders`
 - `TransactionRepository.observeSummaries` and `getByIds`, `TransactionSummary` and `LoadTransactionsUseCase`
@@ -253,7 +257,8 @@ commit than `v0.1.0`, and no build carried this version number. These changes fi
 - Auto-prune oldest transactions when the limit is exceeded
 - `netscope-no-op` release artifact: zero overhead, no dependencies
 
-[Unreleased]: https://github.com/droidnest/io.netscope/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/droidnest/io.netscope/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/droidnest/io.netscope/compare/v0.7.5...v0.8.0
 [0.7.0]: https://github.com/droidnest/io.netscope/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/droidnest/io.netscope/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/droidnest/io.netscope/compare/v0.4.0...v0.5.0

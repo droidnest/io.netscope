@@ -35,7 +35,7 @@
 **`libs.versions.toml`**
 ```toml
 [versions]
-netscope = "0.7.5"
+netscope = "0.8.0"
 
 [libraries]
 netscope-core         = { group = "io.github.droidnest", name = "netscope-core",         version.ref = "netscope" }
@@ -232,6 +232,12 @@ never see the ViewModel, and navigation and open dialogs are part of the state.
 ---
 
 ## Changelog
+
+### v0.8.0
+- **Smoother with heavy traffic** — the list and Stats read no bodies, search runs in SQLite, and bodies are formatted off the main thread and drawn line by line, so large responses no longer freeze the app
+- **Safer capture** — streaming responses are no longer held back, bodies are captured as the app reads them, and oversized rows, exports and clipboard text no longer crash
+- **Harder to open by accident** — shake-to-open needs three jolts within a second
+- **API changes** — the list types move to `TransactionSummary`, and the colour tokens are now `@Composable`; see the CHANGELOG
 
 ### v0.7.5
 - **Automatic releases** — no change to the library: this release is the first one the publish workflow releases on Maven Central by itself, with no manual step on the Central Portal
