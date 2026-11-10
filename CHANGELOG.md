@@ -10,6 +10,10 @@ Planned work is in the [README roadmap](README.md#roadmap).
 
 ## [Unreleased]
 
+---
+
+## [0.8.0] - 2026-11-10
+
 ### Added
 - `NetScope.notificationStyleFlow`, `TransactionRepository.observeSummary` and `Settings.lockedRedactedHeaders`
 - `TransactionRepository.observeSummaries` and `getByIds`, `TransactionSummary` and `LoadTransactionsUseCase`
@@ -19,6 +23,8 @@ Planned work is in the [README roadmap](README.md#roadmap).
   with the types they use. Using them in release code needs `kotlinx-coroutines` in the app
 
 ### Changed
+- Shake-to-open needs three jolts within one second, at a default threshold of 13 m/s² instead of 12, so a
+  single bump, putting the phone down or walking no longer opens NetScope
 - Response bodies are captured as the app reads them, so `intercept` no longer waits for the body. A body
   the app does not read stays empty, and `responseBodySize` is now the size the app read, in bytes
 - Stored bodies are limited to 800 KB of UTF-8, whatever the body size limit is
@@ -251,7 +257,8 @@ commit than `v0.1.0`, and no build carried this version number. These changes fi
 - Auto-prune oldest transactions when the limit is exceeded
 - `netscope-no-op` release artifact: zero overhead, no dependencies
 
-[Unreleased]: https://github.com/droidnest/io.netscope/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/droidnest/io.netscope/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/droidnest/io.netscope/compare/v0.7.5...v0.8.0
 [0.7.0]: https://github.com/droidnest/io.netscope/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/droidnest/io.netscope/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/droidnest/io.netscope/compare/v0.4.0...v0.5.0
