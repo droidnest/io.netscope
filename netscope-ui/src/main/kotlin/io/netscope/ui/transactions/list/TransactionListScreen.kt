@@ -377,7 +377,7 @@ private fun TransactionList(
                 .fillMaxSize()
                 .scrollEdgeFade(state = listState, background = NetScopeDarkBackground)
                 .scrollIndicator(state = listState),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 24.dp),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
             verticalArrangement = Arrangement.spacedBy(5.dp),
         ) {
             item(key = "stats", contentType = "stats") {
