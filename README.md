@@ -5,14 +5,7 @@
 [![Maven Central](https://img.shields.io/maven-central/v/io.github.droidnest/netscope-core?label=Maven%20Central&color=00C8F0)](https://central.sonatype.com/search?q=io.github.droidnest)
 [![API](https://img.shields.io/badge/minSdk-23-brightgreen)](https://developer.android.com/about/versions/marshmallow)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue)](LICENSE)
-
----
-
-## Screenshots
-
-| Transaction List | Transaction Detail | Settings |
-|---|---|---|
-| _request list with search, filter chips, stats bar_ | _tabs: Overview · Request · Response · Timing_ | _theme, capture, privacy, shake, notification_ |
+[![Kotlin](https://img.shields.io/badge/Kotlin-2.0%2B-7F52FF)](https://kotlinlang.org)
 
 ---
 
@@ -52,8 +45,8 @@ dependencies {
     debugImplementation(libs.netscope.ui)
     debugImplementation(libs.netscope.notification)  // optional
 
-    // Release: silent no-op, ~2 KB added to APK
-    releaseImplementation(libs.netscope.no-op)
+    // Release: same API, does nothing, no Room, Compose or OkHttp pulled in
+    releaseImplementation(libs.netscope.no.op)
 }
 ```
 
@@ -67,6 +60,7 @@ val client = OkHttpClient.Builder()
             maxTransactions(500)          // prune oldest once limit is reached
             redactHeaders("Authorization", "X-Api-Key")  // replaced with ██████
             maxBodySize(250_000)          // bytes; bodies are truncated beyond this
+            alwaysReadResponseBody(true)  // also capture non-text content types
         }
     )
     // Optional: applies the mock rules. Must come after NetScope.interceptor() so mocked calls are recorded
@@ -110,6 +104,9 @@ NetScopeActivity.launch(context)
 
 ## Features
 
+Defaults: 500 transactions, 250 KB bodies, and `Authorization`, `Cookie` and `Set-Cookie` redacted. Values saved
+in the in-app Settings screen override the builder from the next launch.
+
 ### Navigation
 - ✅ **Bottom navigation bar** — Requests · Mock · Stats · Settings; slides in/out per route
 
@@ -125,45 +122,50 @@ NetScopeActivity.launch(context)
 
 ### Capture
 - ✅ Every OkHttp request and response — method, URL, headers, body, status code
+- ✅ Bodies captured as your app reads them — streaming responses (`text/event-stream`) are never held back
+- ✅ One-shot and duplex request bodies left untouched
 - ✅ Gzip-encoded responses decoded automatically
 - ✅ Network phase timing: DNS · TCP connect · TLS handshake · TTFB
-- ✅ Configurable body size limit (truncates, never crashes)
+- ✅ Configurable body size limit (truncates, never crashes); stored bodies capped at 800 KB
 - ✅ Configurable max transaction count (oldest pruned automatically)
 
 ### UI — Transaction list
 - ✅ Real-time Flow-driven list — new requests appear instantly
-- ✅ Full-text search across URL, headers, and body
+- ✅ Full-text search across URL, method, status code, headers and bodies — runs in SQLite, debounced
 - ✅ Filter chips — by HTTP method (GET / POST / PUT / PATCH / DELETE) and status class (2xx / 3xx / 4xx / 5xx / ERR)
 - ✅ Sort by time (newest first), duration (slowest first), or size (largest first)
 - ✅ Stats bar — total (cyan) · errors (amber) · avg time (green) · size (purple)
+- ✅ Scroll position indicator and a back-to-top pill that counts requests that arrived meanwhile
+- ✅ Stays smooth under heavy traffic — the list reads no bodies and updates at most four times a second
 - ✅ Animated item transitions and filter chip fade-in/out
 - ✅ **Export all transactions as HAR** — share sheet integration
 
 ### UI — Transaction detail
 - ✅ Four tabs: **Overview** · **Request** · **Response** · **Timing**
 - ✅ Live — a pending request fills in as soon as its response and timing are saved
-- ✅ Overview: request/response dcard sections + 3 mini stat cards (Duration · Size · Protocol) + Copy as cURL row
+- ✅ Overview: request/response card sections + 3 mini stat cards (Duration · Size · Protocol) + Copy as cURL row
 - ✅ Timing: Summary card (Started · Completed · Total) + phase bars (DNS=purple, TCP=cyan, TLS=pink, TTFB=amber) + stacked timeline bar + legend
 - ✅ Directional slide animation between tabs
-- ✅ JSON and XML syntax highlighting
+- ✅ JSON and XML syntax highlighting, formatted off the main thread and drawn lazily, line by line
 - ✅ One-tap copy on any field (URL, headers, body, cURL command)
 - ✅ Copy all · Share full summary · **Share as HAR** actions
 - ✅ Snackbar confirmation on every copy
+- ✅ Large exports are shared as a file, and oversized clipboard text is cut with a note instead of crashing
 
 ### Settings (all applied instantly at runtime)
-- ✅ **Theme** — Light / Dark / Follow system (light is default)
+- ✅ **Theme** — Light / Dark / Follow system (light is default), WCAG AA contrast in both
 - ✅ **Max transaction count** — 100 / 250 / 500 / 1 000 / 2 000 / 5 000
 - ✅ **Body size limit** — 50 KB / 100 KB / 250 KB / 500 KB / 1 MB
 - ✅ **Always read response body** — force-read even non-text content types
 - ✅ **Header redaction rules** — add / remove headers redacted with ██████
-- ✅ **Shake-to-open** — enable / disable the gesture at runtime
+- ✅ **Shake-to-open** — enable / disable the gesture at runtime (three jolts within a second, so a bump doesn't open it)
 - ✅ **Notification style** — Off / Minimal (count only) / Detailed (count + errors + last code)
 - ✅ **Clear all transactions** — confirmation dialog
 
 ### Privacy
 - ✅ All data stays on-device in a local Room database
 - ✅ Redacted headers never appear in logs, exports, or any network call
-- ✅ No-op release build compiles to ~2 KB and makes zero network calls
+- ✅ The no-op release artifact stores nothing and makes zero network calls
 
 ---
 
@@ -315,7 +317,7 @@ never see the ViewModel, and navigation and open dialogs are part of the state.
 
 | Version | Planned |
 |---|---|
-| **v0.8.0** | Network graph, export to Postman collection |
+| **v0.9.0** | Network graph, export to Postman collection |
 | **v1.0.0** | Ktor plugin, desktop companion app |
 
 ---
@@ -325,10 +327,22 @@ never see the ViewModel, and navigation and open dialogs are part of the state.
 | | |
 |---|---|
 | Min SDK | 23 (Android 6.0) |
+| Compile SDK | 35+ |
 | OkHttp | 4.x or 5.x (`compileOnly` — your version is used) |
 | Kotlin | 2.0+ (the modules are compiled for Kotlin 2.0) |
-| Jetpack Compose | BOM 2024.x+ |
-| Room | 2.6+ |
+| Jetpack Compose | BOM 2024.12.01 or newer (tested on Compose 1.7 to 1.12) |
+| Room | 2.7.0, bundled by `netscope-core` (Gradle resolves to your version if it is newer) |
+
+---
+
+## Contributing
+
+Issues and pull requests are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for the setup, branching and
+architecture rules. The `:sample` app makes real requests and wires every optional feature:
+
+```bash
+./gradlew :sample:installDebug
+```
 
 ---
 
