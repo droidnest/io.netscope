@@ -14,6 +14,9 @@ gradle/wrapper/gradle-wrapper.jar
 .idea/navEditor.xml
 .idea/assetWizardSettings.xml
 .idea/*.iml
+.idea/deploymentTargetSelector.xml
+.idea/deviceManager.xml
+.idea/studiobot.xml
 *.iml
 
 # ─── OS artefacts ─────────────────────────────────────────────────────────────
@@ -29,6 +32,9 @@ keystore.properties
 *.jks
 *.keystore
 *.p12
+*.key
+*.gpg
+*.asc
 
 # ─── Profiling / captures ─────────────────────────────────────────────────────
 captures/

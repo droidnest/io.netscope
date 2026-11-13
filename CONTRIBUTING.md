@@ -5,12 +5,24 @@ Thank you for your interest in contributing! 🎉
 ## Setup
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/netscope.git
-cd netscope
+git clone https://github.com/droidnest/io.netscope.git
+cd io.netscope
 ./gradlew build
+./gradlew :sample:installDebug   # demo app that wires every feature
 ```
 
-Requires: JDK 17, Android Studio Hedgehog or later.
+Requires JDK 17 and an Android Studio release that supports AGP 9.1 (the Gradle wrapper is 9.3.1). The library
+modules compile against SDK 35.
+
+## Reporting bugs and ideas
+
+Open an issue on [GitHub](https://github.com/droidnest/io.netscope/issues) with the NetScope version, the
+OkHttp, Kotlin and Compose versions of your app, the Android version of the device, and the steps or stack trace.
+A feature request is easier to accept with the problem it solves rather than only the API you would like.
+
+Report a security issue, such as a redacted header showing up somewhere, privately through
+[GitHub security advisories](https://github.com/droidnest/io.netscope/security/advisories/new) instead of a public
+issue.
 
 ## Branching
 
@@ -67,6 +79,7 @@ The [README](README.md#architecture) describes the layers and the UI flows. When
 ## Testing
 
 ```bash
+./gradlew testDebugUnitTest          # every module
 ./gradlew :netscope-core:testDebugUnitTest
 ./gradlew :netscope-ui:testDebugUnitTest
 ./gradlew :netscope-export:testDebugUnitTest
