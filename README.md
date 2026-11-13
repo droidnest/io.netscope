@@ -9,6 +9,14 @@
 
 ---
 
+## Screenshots
+
+| Requests | Overview | Response | Stats | Settings |
+|---|---|---|---|---|
+| <img src="docs/screenshots/list.png" width="180" alt="Request list with search, filter chips and stats bar"> | <img src="docs/screenshots/detail-overview.png" width="180" alt="Transaction detail, Overview tab"> | <img src="docs/screenshots/detail-response.png" width="180" alt="Response tab with headers and highlighted JSON body"> | <img src="docs/screenshots/stats.png" width="180" alt="Stats tab with latency percentiles and status distribution"> | <img src="docs/screenshots/settings.png" width="180" alt="Settings screen"> |
+
+---
+
 ## What's inside
 
 | Module | Role | Include in |
