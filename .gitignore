@@ -17,6 +17,7 @@ gradle/wrapper/gradle-wrapper.jar
 .idea/deploymentTargetSelector.xml
 .idea/deviceManager.xml
 .idea/studiobot.xml
+.idea/misc.xml
 *.iml
 
 # ─── OS artefacts ─────────────────────────────────────────────────────────────
