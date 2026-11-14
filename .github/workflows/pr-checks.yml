@@ -1,0 +1,64 @@
+name: PR checks
+
+# Every pull request must pass these jobs before it can merge. The rulesets on develop and main list them as
+# required status checks, so a red or missing check blocks the merge button.
+on:
+  pull_request:
+    branches:
+      - develop
+      - main
+
+concurrency:
+  group: pr-checks-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  source-branch:
+    name: Source branch
+    runs-on: ubuntu-latest
+    steps:
+      # Contributions land on develop; main only ever receives develop from this repository
+      - name: Only develop may target main
+        env:
+          BASE: ${{ github.base_ref }}
+          HEAD: ${{ github.head_ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+        run: |
+          if [[ "$BASE" == "main" && ( "$HEAD" != "develop" || "$HEAD_REPO" != "$GITHUB_REPOSITORY" ) ]]; then
+            echo "::error::Pull requests must target develop. Only $GITHUB_REPOSITORY:develop can be merged into main."
+            exit 1
+          fi
+          echo "$HEAD_REPO:$HEAD -> $BASE is allowed"
+
+  build:
+    name: Build and test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v5
+
+      - name: Unit tests
+        run: ./gradlew testDebugUnitTest --no-daemon --stacktrace
+
+      - name: Assemble every module
+        run: ./gradlew assembleDebug assembleRelease --no-daemon --stacktrace
+
+      - name: Upload test reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: '**/build/reports/tests/'
+          if-no-files-found: ignore

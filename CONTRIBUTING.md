@@ -35,9 +35,12 @@ issue.
 ## Pull Requests
 
 1. Fork the repo and create your branch from `develop`
-2. Make sure `./gradlew build` passes
+2. Make sure `./gradlew testDebugUnitTest assembleDebug` passes
 3. Add tests if applicable
-4. Open a PR against `develop`
+4. Open a PR against `develop`. PRs against `main` are rejected: only `develop` is merged into `main`
+
+Every PR runs `.github/workflows/pr-checks.yml`. It merges only once the `Build and test` check (unit tests and a
+build of every module) is green, the branch is up to date with `develop`, and the maintainer has approved it.
 
 ## Releasing (maintainers only)
 
