@@ -36,7 +36,7 @@
 **`libs.versions.toml`**
 ```toml
 [versions]
-netscope = "0.8.0"
+netscope = "0.9.0"
 
 [libraries]
 netscope-core         = { group = "io.github.droidnest", name = "netscope-core",         version.ref = "netscope" }
@@ -117,6 +117,7 @@ in the in-app Settings screen override the builder from the next launch.
 
 ### Navigation
 - ✅ **Bottom navigation bar** — Requests · Mock · Stats · Settings; slides in/out per route
+- ✅ **Back to your app** — the back arrow on every main screen closes NetScope
 
 ### Analytics (Stats tab)
 - ✅ Summary row — total, success %, error count, avg duration
@@ -155,6 +156,7 @@ in the in-app Settings screen override the builder from the next launch.
 - ✅ Timing: Summary card (Started · Completed · Total) + phase bars (DNS=purple, TCP=cyan, TLS=pink, TTFB=amber) + stacked timeline bar + legend
 - ✅ Directional slide animation between tabs
 - ✅ JSON and XML syntax highlighting, formatted off the main thread and drawn lazily, line by line
+- ✅ **Find in request and response** — search headers and body, every match highlighted, jump between them with a counter
 - ✅ One-tap copy on any field (URL, headers, body, cURL command)
 - ✅ Copy all · Share full summary · **Share as HAR** actions
 - ✅ Snackbar confirmation on every copy
@@ -243,6 +245,10 @@ never see the ViewModel, and navigation and open dialogs are part of the state.
 
 ## Changelog
 
+### v0.9.0
+- **Find in large requests and responses** — search the headers and body of the Request and Response tabs, with highlighted matches and next / previous navigation
+- **Back to your app** — a back arrow on the main screens closes NetScope
+
 ### v0.8.0
 - **Smoother with heavy traffic** — the list and Stats read no bodies, search runs in SQLite, and bodies are formatted off the main thread and drawn line by line, so large responses no longer freeze the app
 - **Safer capture** — streaming responses are no longer held back, bodies are captured as the app reads them, and oversized rows, exports and clipboard text no longer crash
@@ -325,7 +331,7 @@ never see the ViewModel, and navigation and open dialogs are part of the state.
 
 | Version | Planned |
 |---|---|
-| **v0.9.0** | Network graph, export to Postman collection |
+| **v0.10.0** | Network graph, export to Postman collection |
 | **v1.0.0** | Ktor plugin, desktop companion app |
 
 ---
