@@ -87,6 +87,7 @@ internal fun NetScopeNavGraph(
     navController: NavHostController,
     themeMode: ThemeMode,
     onThemeChange: (ThemeMode) -> Unit,
+    onExit: () -> Unit,
 ) {
     // Scoped to the graph: the list and the Stats screen are one flow, and the Stats screen shows
     // the figures of the filtered list.
@@ -128,6 +129,7 @@ internal fun NetScopeNavGraph(
                     uiState           = transactionsViewModel.uiState.collectAsStateWithLifecycle().value,
                     onIntent          = transactionsViewModel::onIntent,
                     onOpenTransaction = { id -> navController.openTransaction(id = id) },
+                    onExit            = onExit,
                 )
             }
 
@@ -138,6 +140,7 @@ internal fun NetScopeNavGraph(
                     onIntent   = viewModel::onIntent,
                     onAddRule  = { navController.navigate(ROUTE_MOCK_ADD) },
                     onEditRule = { id -> navController.navigate("mock_rules/edit/$id") },
+                    onExit     = onExit,
                 )
             }
 
@@ -146,6 +149,7 @@ internal fun NetScopeNavGraph(
                     uiState           = transactionsViewModel.uiState.collectAsStateWithLifecycle().value,
                     onIntent          = transactionsViewModel::onIntent,
                     onOpenTransaction = { id -> navController.openTransaction(id = id) },
+                    onExit            = onExit,
                 )
             }
 
@@ -157,6 +161,7 @@ internal fun NetScopeNavGraph(
                     onBack        = { navController.popBackStack() },
                     currentTheme  = themeMode,
                     onThemeChange = onThemeChange,
+                    onExit        = onExit,
                 )
             }
 

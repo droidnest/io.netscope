@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.netscope.model.MockRule
 import io.netscope.ui.component.ColorSuccess
+import io.netscope.ui.component.ExitButton
 import io.netscope.ui.component.NetScopeAccent
 import io.netscope.ui.component.NetScopeBorder
 import io.netscope.ui.component.NetScopeCard
@@ -73,6 +74,7 @@ internal fun MockRulesScreen(
     onIntent: (UiIntent) -> Unit,
     onAddRule: () -> Unit,
     onEditRule: (String) -> Unit,
+    onExit: () -> Unit,
 ) {
     val state = uiState.dataOrNull() ?: return
     val rules = state.rules
@@ -92,6 +94,7 @@ internal fun MockRulesScreen(
         contentWindowInsets = WindowInsets(0),
         topBar = {
             TopAppBar(
+                navigationIcon = { ExitButton(onExit = onExit) },
                 title = {
                     ScreenTitle(
                         text = "Mock Rules",

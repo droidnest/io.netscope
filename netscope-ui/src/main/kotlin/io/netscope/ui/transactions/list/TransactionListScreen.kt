@@ -96,6 +96,7 @@ import io.netscope.model.TransactionSummary
 import io.netscope.ui.component.ColorAmber
 import io.netscope.ui.component.ColorPurple
 import io.netscope.ui.component.ColorSuccess
+import io.netscope.ui.component.ExitButton
 import io.netscope.ui.component.NetScopeAccent
 import io.netscope.ui.component.NetScopeBorder
 import io.netscope.ui.component.NetScopeCard
@@ -149,6 +150,7 @@ internal fun TransactionListScreen(
     uiState: UiState<TransactionsUiState>,
     onIntent: (UiIntent) -> Unit,
     onOpenTransaction: (Long) -> Unit,
+    onExit: () -> Unit,
 ) {
     val state = uiState.dataOrNull() ?: return
     val content = state.content
@@ -189,6 +191,7 @@ internal fun TransactionListScreen(
         contentWindowInsets = WindowInsets(0),
         topBar = {
             TopAppBar(
+                navigationIcon = { ExitButton(onExit = onExit) },
                 title = {
                     val accent = NetScopeAccent
                     val onSurface = NetScopeOnSurface

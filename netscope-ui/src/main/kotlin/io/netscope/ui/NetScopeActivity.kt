@@ -78,6 +78,8 @@ class NetScopeActivity : ComponentActivity() {
                             prefs.themeMode = mode
                             themeMode = mode
                         },
+                        // Back to the inspected app, wherever NetScope was opened from
+                        onExit         = ::finish,
                     )
                 }
             }
