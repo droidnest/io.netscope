@@ -50,6 +50,7 @@ import io.netscope.ui.component.ColorError
 import io.netscope.ui.component.ColorPink
 import io.netscope.ui.component.ColorPurple
 import io.netscope.ui.component.ColorSuccess
+import io.netscope.ui.component.ExitButton
 import io.netscope.ui.component.NetScopeAccent
 import io.netscope.ui.component.NetScopeBorder
 import io.netscope.ui.component.NetScopeCard
@@ -89,6 +90,7 @@ internal fun StatsScreen(
     uiState: UiState<TransactionsUiState>,
     onIntent: (UiIntent) -> Unit,
     onOpenTransaction: (Long) -> Unit,
+    onExit: () -> Unit,
 ) {
     val state = uiState.dataOrNull() ?: return
     val stats = state.content.stats
@@ -109,6 +111,7 @@ internal fun StatsScreen(
         contentWindowInsets = WindowInsets(0),
         topBar = {
             TopAppBar(
+                navigationIcon = { ExitButton(onExit = onExit) },
                 title = { ScreenTitle(text = "Stats") },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = NetScopeSurface),
             )

@@ -12,6 +12,17 @@ Planned work is in the [README roadmap](README.md#roadmap).
 
 ---
 
+## [0.9.0] - 2026-11-19
+
+### Added
+- Search in the Request and Response tabs: a search icon in the detail screen's top bar opens a field that finds
+  text in the headers and the formatted body, ignoring case. Every match is marked, a counter shows the current
+  one, and the arrows jump between them. The search runs off the main thread after typing pauses, counts at most
+  5,000 matches, and the query carries over from one tab to the other. Back closes it
+- A back arrow on the Requests, Mock, Stats and Settings screens that closes NetScope and returns to the app
+
+---
+
 ## [0.8.0] - 2026-11-10
 
 ### Added
