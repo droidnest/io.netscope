@@ -163,4 +163,38 @@ class TransactionDetailViewModelTest {
         assertEquals(true, opened)
         assertFalse(sut.uiState.value.dataOrNull()!!.isMenuOpen)
     }
+
+    @Test
+    fun `should keep the search query across tabs when the search is open`() = runTest {
+        // Given
+        collectState()
+        sut.onIntent(intent = TransactionDetailUiIntent.Started(transactionId = 1L))
+        sut.onIntent(intent = TransactionDetailUiIntent.SearchClicked)
+
+        // When
+        sut.onIntent(intent = TransactionDetailUiIntent.SearchQueryTyped(query = "token"))
+        sut.onIntent(intent = TransactionDetailUiIntent.TabClicked(tab = 2))
+
+        // Then
+        val state = sut.uiState.value.dataOrNull()!!
+        assertTrue(state.isSearchOpen)
+        assertEquals("token", state.searchQuery)
+    }
+
+    @Test
+    fun `should clear the query when the search is closed`() = runTest {
+        // Given
+        collectState()
+        sut.onIntent(intent = TransactionDetailUiIntent.Started(transactionId = 1L))
+        sut.onIntent(intent = TransactionDetailUiIntent.SearchClicked)
+        sut.onIntent(intent = TransactionDetailUiIntent.SearchQueryTyped(query = "token"))
+
+        // When
+        sut.onIntent(intent = TransactionDetailUiIntent.SearchClosed)
+
+        // Then
+        val state = sut.uiState.value.dataOrNull()!!
+        assertFalse(state.isSearchOpen)
+        assertEquals("", state.searchQuery)
+    }
 }

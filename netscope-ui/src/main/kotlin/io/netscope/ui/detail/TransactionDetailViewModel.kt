@@ -49,6 +49,9 @@ internal class TransactionDetailViewModel(
             is TransactionDetailUiIntent.TabClicked -> selection.update { it.copy(tab = intent.tab) }
             TransactionDetailUiIntent.MenuClicked -> selection.update { it.copy(isMenuOpen = true) }
             TransactionDetailUiIntent.MenuDismissed -> selection.update { it.copy(isMenuOpen = false) }
+            TransactionDetailUiIntent.SearchClicked -> selection.update { it.copy(isSearchOpen = true) }
+            is TransactionDetailUiIntent.SearchQueryTyped -> selection.update { it.copy(searchQuery = intent.query) }
+            TransactionDetailUiIntent.SearchClosed -> selection.update { it.copy(isSearchOpen = false, searchQuery = "") }
             TransactionDetailUiIntent.ErrorShown -> transactionId.value = null
         }
     }
@@ -63,10 +66,17 @@ internal class TransactionDetailViewModel(
             transaction = this,
             selectedTab = selection.tab,
             isMenuOpen = selection.isMenuOpen,
+            isSearchOpen = selection.isSearchOpen,
+            searchQuery = selection.searchQuery,
         ),
     )
 
-    private data class Selection(val tab: Int = 0, val isMenuOpen: Boolean = false)
+    private data class Selection(
+        val tab: Int = 0,
+        val isMenuOpen: Boolean = false,
+        val isSearchOpen: Boolean = false,
+        val searchQuery: String = "",
+    )
 
     class Factory : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")

@@ -1,5 +1,6 @@
 package io.netscope.ui.detail
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.VisibilityThreshold
@@ -27,15 +28,21 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -58,15 +65,23 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
@@ -101,11 +116,23 @@ import io.netscope.ui.component.scrollIndicator
 import io.netscope.ui.mvi.UiIntent
 import io.netscope.ui.mvi.UiState
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+
+private val SEARCHABLE_TABS = 1..2
+
+/** How long typing pauses before a search runs: each run scans the whole body. */
+private const val SEARCH_DEBOUNCE_MILLIS = 200L
+
+/** Body lines kept above the line of the current match when it is scrolled to. */
+private const val SEARCH_CONTEXT_LINES = 3
+
+/** The search the Request and Response tabs share. */
+private data class MessageSearch(val isOpen: Boolean, val query: String)
 
 private val TAB_SLIDE = spring(
     stiffness = Spring.StiffnessMediumLow,
@@ -161,6 +188,8 @@ internal fun TransactionDetailScreen(
 
     detail?.let { state ->
         val tx = state.transaction
+        val search = MessageSearch(isOpen = state.isSearchOpen, query = state.searchQuery)
+        BackHandler(enabled = state.isSearchOpen) { onIntent(TransactionDetailUiIntent.SearchClosed) }
         Scaffold(
             snackbarHost = {
                 SnackbarHost(hostState = snackbarHostState) { data ->
@@ -194,6 +223,17 @@ internal fun TransactionDetailScreen(
                         }
                     },
                     actions = {
+                        // Only the Request and Response tabs hold text worth searching
+                        if (selectedTab in SEARCHABLE_TABS && !state.isSearchOpen) {
+                            IconButton(onClick = { onIntent(TransactionDetailUiIntent.SearchClicked) }) {
+                                Icon(
+                                    imageVector = Icons.Default.Search,
+                                    contentDescription = "Search headers and body",
+                                    tint = NetScopeMuted,
+                                )
+                            }
+                        }
+
                         // Primary one-tap action: copy as cURL
                         IconButton(onClick = {
                             NetScopeExporter.copyToClipboard(
@@ -376,8 +416,8 @@ internal fun TransactionDetailScreen(
                 ) { tab ->
                     when (tab) {
                         0    -> OverviewTab(tx, context, onCopied)
-                        1    -> RequestTab(tx, context, onCopied)
-                        2    -> ResponseTab(tx, context, onCopied)
+                        1    -> RequestTab(tx, context, onCopied, search, onIntent)
+                        2    -> ResponseTab(tx, context, onCopied, search, onIntent)
                         3    -> TimingTab(tx)
                         else -> Unit
                     }
@@ -745,7 +785,13 @@ private fun TimingTab(tx: NetTransaction) {
 // ── Tab: Request ──────────────────────────────────────────────────────────────
 
 @Composable
-private fun RequestTab(tx: NetTransaction, context: android.content.Context, onCopied: (String) -> Unit) {
+private fun RequestTab(
+    tx: NetTransaction,
+    context: android.content.Context,
+    onCopied: (String) -> Unit,
+    search: MessageSearch,
+    onIntent: (UiIntent) -> Unit,
+) {
     HttpMessageTab(
         headers = tx.requestHeaders,
         body = tx.requestBody,
@@ -754,13 +800,21 @@ private fun RequestTab(tx: NetTransaction, context: android.content.Context, onC
         bodyLabel = "Request body",
         context = context,
         onCopied = onCopied,
+        search = search,
+        onIntent = onIntent,
     )
 }
 
 // ── Tab: Response ─────────────────────────────────────────────────────────────
 
 @Composable
-private fun ResponseTab(tx: NetTransaction, context: android.content.Context, onCopied: (String) -> Unit) {
+private fun ResponseTab(
+    tx: NetTransaction,
+    context: android.content.Context,
+    onCopied: (String) -> Unit,
+    search: MessageSearch,
+    onIntent: (UiIntent) -> Unit,
+) {
     HttpMessageTab(
         headers = tx.responseHeaders,
         body = tx.responseBody,
@@ -770,6 +824,8 @@ private fun ResponseTab(tx: NetTransaction, context: android.content.Context, on
         bodyLabel = "Response body",
         context = context,
         onCopied = onCopied,
+        search = search,
+        onIntent = onIntent,
     )
 }
 
@@ -784,59 +840,221 @@ private fun HttpMessageTab(
     bodyLabel: String,
     context: android.content.Context,
     onCopied: (String) -> Unit,
+    search: MessageSearch,
+    onIntent: (UiIntent) -> Unit,
 ) {
     val listState = rememberLazyListState()
     val formattedBody by produceState<FormattedBody?>(initialValue = null, key1 = body) {
         value = body?.let { withContext(Dispatchers.Default) { formatBody(body = it) } }
     }
 
-    LazyColumn(
-        state = listState,
-        modifier = Modifier
-            .fillMaxSize()
-            .scrollIndicator(state = listState),
-        contentPadding = PaddingValues(top = 10.dp, bottom = 20.dp),
-    ) {
-        if (headers.isNotEmpty()) {
-            item(key = "headers", contentType = "headers") {
-                SectionCard(
-                    title    = "Headers (${headers.size})",
-                    onCopy   = {
-                        NetScopeExporter.copyToClipboard(context, NetScopeExporter.headersText(headers), headersLabel)
-                        onCopied(headersLabel)
-                    },
-                    modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 8.dp),
-                ) {
-                    HeaderTable(headers)
+    // Marks follow the typed query; the counter and the arrows follow the matches once they are found
+    val query = search.query
+    val matches by produceState(initialValue = emptyList<SearchMatch>(), headers, formattedBody, query) {
+        if (query.isEmpty()) {
+            value = emptyList()
+            return@produceState
+        }
+        delay(SEARCH_DEBOUNCE_MILLIS)
+        val lines = formattedBody?.lines.orEmpty()
+        value = withContext(Dispatchers.Default) { findMatches(headers = headers, lines = lines, query = query) }
+    }
+    var currentIndex by remember(matches) { mutableIntStateOf(0) }
+    val current = matches.getOrNull(currentIndex)
+    val bodyFirstItem = if (headers.isNotEmpty()) 2 else 1 // the headers card, then the body title
+
+    LaunchedEffect(current) {
+        current?.let { listState.scrollToMatch(match = it, bodyFirstItem = bodyFirstItem) }
+    }
+
+    val searchColors = SearchColors(
+        match = ColorAmber.copy(alpha = 0.35f),
+        current = ColorAmber,
+        onCurrent = Color.Black,
+    )
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        if (search.isOpen) {
+            MessageSearchBar(
+                query = query,
+                matchCount = matches.size,
+                currentIndex = currentIndex,
+                onQueryChange = { onIntent(TransactionDetailUiIntent.SearchQueryTyped(query = it)) },
+                onPrevious = { if (matches.isNotEmpty()) currentIndex = (currentIndex - 1).mod(matches.size) },
+                onNext = { if (matches.isNotEmpty()) currentIndex = (currentIndex + 1).mod(matches.size) },
+                onClose = { onIntent(TransactionDetailUiIntent.SearchClosed) },
+            )
+        }
+        LazyColumn(
+            state = listState,
+            modifier = Modifier
+                .fillMaxSize()
+                .scrollIndicator(state = listState),
+            contentPadding = PaddingValues(top = 10.dp, bottom = 20.dp),
+        ) {
+            if (headers.isNotEmpty()) {
+                item(key = "headers", contentType = "headers") {
+                    SectionCard(
+                        title    = "Headers (${headers.size})",
+                        onCopy   = {
+                            NetScopeExporter.copyToClipboard(context, NetScopeExporter.headersText(headers), headersLabel)
+                            onCopied(headersLabel)
+                        },
+                        modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 8.dp),
+                    ) {
+                        HeaderTable(
+                            headers = headers,
+                            query = query,
+                            current = current as? SearchMatch.InHeader,
+                            searchColors = searchColors,
+                        )
+                    }
                 }
             }
-        }
-        body?.let { b ->
-            item(key = "bodyTitle", contentType = "bodyTitle") {
-                BodyTitle(
-                    onCopy = {
-                        NetScopeExporter.copyToClipboard(context, b, bodyLabel)
-                        onCopied(bodyLabel)
-                    },
-                )
-            }
-            val formatted = formattedBody
-            if (formatted == null) {
-                item(key = "bodyFormatting", contentType = "bodyFormatting") { EmptyTabState("Formatting body…") }
-            } else {
-                items(count = formatted.lines.size, contentType = { "bodyLine" }) { index ->
-                    BodyLine(
-                        line = formatted.lines[index],
-                        kind = formatted.kind,
-                        isLast = index == formatted.lines.lastIndex,
+            body?.let { b ->
+                item(key = "bodyTitle", contentType = "bodyTitle") {
+                    BodyTitle(
+                        onCopy = {
+                            NetScopeExporter.copyToClipboard(context, b, bodyLabel)
+                            onCopied(bodyLabel)
+                        },
                     )
                 }
+                val formatted = formattedBody
+                if (formatted == null) {
+                    item(key = "bodyFormatting", contentType = "bodyFormatting") { EmptyTabState("Formatting body…") }
+                } else {
+                    val currentInBody = current as? SearchMatch.InBody
+                    items(count = formatted.lines.size, contentType = { "bodyLine" }) { index ->
+                        BodyLine(
+                            line = formatted.lines[index],
+                            kind = formatted.kind,
+                            isLast = index == formatted.lines.lastIndex,
+                            query = query,
+                            currentStart = currentInBody?.takeIf { it.line == index }?.start,
+                            searchColors = searchColors,
+                        )
+                    }
+                }
+            }
+            if (headers.isEmpty() && body == null) {
+                item(key = "empty", contentType = "empty") { EmptyTabState(emptyMessage) }
             }
         }
-        if (headers.isEmpty() && body == null) {
-            item(key = "empty", contentType = "empty") { EmptyTabState(emptyMessage) }
+    }
+}
+
+/** Brings [match] into view when it is not, a few lines below the top so that what leads to it shows too. */
+private suspend fun LazyListState.scrollToMatch(match: SearchMatch, bodyFirstItem: Int) {
+    val (target, context) = when (match) {
+        is SearchMatch.InHeader -> 0 to 0
+        is SearchMatch.InBody   -> bodyFirstItem + match.line to SEARCH_CONTEXT_LINES
+    }
+    val isFullyVisible = layoutInfo.visibleItemsInfo.any { item ->
+        item.index == target &&
+            item.offset >= layoutInfo.viewportStartOffset &&
+            item.offset + item.size <= layoutInfo.viewportEndOffset
+    }
+    if (!isFullyVisible) scrollToItem(index = (target - context).coerceAtLeast(0))
+}
+
+@Composable
+private fun MessageSearchBar(
+    query: String,
+    matchCount: Int,
+    currentIndex: Int,
+    onQueryChange: (String) -> Unit,
+    onPrevious: () -> Unit,
+    onNext: () -> Unit,
+    onClose: () -> Unit,
+) {
+    val focusRequester = remember { FocusRequester() }
+    LaunchedEffect(Unit) { focusRequester.requestFocus() }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(NetScopeSurface)
+            .padding(start = 12.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Row(
+            modifier = Modifier
+                .weight(1f)
+                .height(36.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(NetScopeCard)
+                .padding(horizontal = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Icon(
+                imageVector = Icons.Default.Search,
+                contentDescription = null,
+                tint = NetScopeMuted,
+                modifier = Modifier.size(16.dp),
+            )
+            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+                if (query.isEmpty()) {
+                    Text(
+                        text = "Find in headers and body…",
+                        color = NetScopeMuted,
+                        fontSize = 11.sp,
+                        fontFamily = FontFamily.Monospace,
+                    )
+                }
+                BasicTextField(
+                    value = query,
+                    onValueChange = onQueryChange,
+                    textStyle = TextStyle(
+                        color = NetScopeOnSurface,
+                        fontSize = 13.sp,
+                        fontFamily = FontFamily.Monospace,
+                    ),
+                    cursorBrush = SolidColor(NetScopeAccent),
+                    singleLine = true,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .focusRequester(focusRequester),
+                )
+            }
+            if (query.isNotEmpty()) {
+                Text(
+                    text = when {
+                        matchCount == 0                  -> "0/0"
+                        matchCount >= MAX_SEARCH_MATCHES -> "${currentIndex + 1}/$MAX_SEARCH_MATCHES+"
+                        else                             -> "${currentIndex + 1}/$matchCount"
+                    },
+                    color = if (matchCount == 0) ColorError else NetScopeMuted,
+                    fontSize = 11.sp,
+                    fontFamily = FontFamily.Monospace,
+                )
+            }
+        }
+        IconButton(onClick = onPrevious, enabled = matchCount > 0, modifier = Modifier.size(36.dp)) {
+            Icon(
+                imageVector = Icons.Default.KeyboardArrowUp,
+                contentDescription = "Previous match",
+                tint = if (matchCount > 0) NetScopeOnSurface else NetScopeMuted,
+            )
+        }
+        IconButton(onClick = onNext, enabled = matchCount > 0, modifier = Modifier.size(36.dp)) {
+            Icon(
+                imageVector = Icons.Default.KeyboardArrowDown,
+                contentDescription = "Next match",
+                tint = if (matchCount > 0) NetScopeOnSurface else NetScopeMuted,
+            )
+        }
+        IconButton(onClick = onClose, modifier = Modifier.size(36.dp)) {
+            Icon(
+                imageVector = Icons.Default.Close,
+                contentDescription = "Close search",
+                tint = NetScopeMuted,
+                modifier = Modifier.size(18.dp),
+            )
         }
     }
+    HorizontalDivider(color = NetScopeBorder, thickness = 0.5.dp)
 }
 
 // ── Shared sub-components ─────────────────────────────────────────────────────
@@ -924,9 +1142,15 @@ private fun InfoRow(
 }
 
 @Composable
-private fun HeaderTable(headers: List<NetHeader>) {
+private fun HeaderTable(
+    headers: List<NetHeader>,
+    query: String,
+    current: SearchMatch.InHeader?,
+    searchColors: SearchColors,
+) {
     Column {
-        headers.forEach { header ->
+        headers.forEachIndexed { index, header ->
+            val currentHere = current?.takeIf { it.header == index }
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -935,14 +1159,22 @@ private fun HeaderTable(headers: List<NetHeader>) {
                 verticalAlignment = Alignment.Top,
             ) {
                 Text(
-                    text       = header.name,
+                    text       = AnnotatedString(header.name).withMatches(
+                        query = query,
+                        currentStart = currentHere?.takeIf { !it.inValue }?.start,
+                        colors = searchColors,
+                    ),
                     color      = if (header.isRedacted) ColorError else NetScopeText2,
                     fontSize   = 10.sp,
                     fontFamily = FontFamily.SansSerif,
                     modifier   = Modifier.weight(0.4f),
                 )
                 Text(
-                    text       = header.value,
+                    text       = AnnotatedString(header.value).withMatches(
+                        query = query,
+                        currentStart = currentHere?.takeIf { it.inValue }?.start,
+                        colors = searchColors,
+                    ),
                     color      = if (header.isRedacted) ColorError else NetScopeOnSurface,
                     fontSize   = 10.sp,
                     fontFamily = FontFamily.Monospace,
@@ -986,9 +1218,19 @@ private fun BodyTitle(onCopy: () -> Unit) {
 
 /** One line of a body. Lines wrap: a shared horizontal scroll cannot span the items of a lazy list. */
 @Composable
-private fun BodyLine(line: String, kind: BodyKind, isLast: Boolean) {
+private fun BodyLine(
+    line: String,
+    kind: BodyKind,
+    isLast: Boolean,
+    query: String,
+    currentStart: Int?,
+    searchColors: SearchColors,
+) {
     val syntax = NetScopeSyntax
-    val text = remember(line, kind, syntax) { line.highlighted(kind = kind, colors = syntax) }
+    val highlighted = remember(line, kind, syntax) { line.highlighted(kind = kind, colors = syntax) }
+    val text = remember(highlighted, query, currentStart, searchColors) {
+        highlighted.withMatches(query = query, currentStart = currentStart, colors = searchColors)
+    }
     Text(
         text       = text,
         fontSize   = 11.sp,
